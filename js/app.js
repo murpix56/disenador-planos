@@ -1,24 +1,38 @@
 /* Diseñador de planos · Policía Local de Don Benito (uso personal)
  * Plano gris y blanco (o calles / satélite), recorrido que sigue las calles, color, flechas y nombres a medida, y descarga en PNG. */
-import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108a';
-import { net, CFG, loadNet, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108a';
-import { dibujar, crearVista, trazoEn, etiquetaEn, imagen, ESTILO_CARTEL } from './render.js?v=20261108a';
+import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108b';
+import { net, CFG, loadNet, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108b';
+import { dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, ESTILO_CARTEL } from './render.js?v=20261108b';
 
 /* ───────── Proyecto ───────── */
 const PROY_KEY = 'plano.proyecto.v1';
 const PALETA = ['#16a34a', '#d92d20', '#f79009', '#1d5fb5', '#7a5af8', '#101828'];
 const FORMATOS = [['1080x1080', 'Cuadrado 1080×1080'], ['1080x1350', 'Vertical 1080×1350'], ['1200x630', 'Horizontal 1200×630'], ['2160x2160', 'Cuadrado HD 2160×2160']];
-const nuevoProyecto = () => ({ nombre: 'Plano sin título', base: 'gris', gris: { fondo: '#e6e6e6', calle: '#ffffff', ancho: 1 }, trazos: [] });
+const LEY_DEF = { on: false, esq: 'bi', tam: 15, borde: '#d92d20', fondo: '#ffffff', color: '#101828' };
+const nuevoProyecto = () => ({ nombre: 'Plano sin título', base: 'gris', gris: { fondo: '#e6e6e6', calle: '#ffffff', ancho: 1 }, trazos: [], marcas: [], notas: [], leyenda: { ...LEY_DEF } });
+const nuevaMarca = (tipo, lat, lon) => ({ id: uid(), tipo, lat, lon, tam: 40, texto: '', ttam: 13, color: '#1d5fb5', halo: '#ffffff', mayus: true });
+const nuevaNota = (lat, lon) => ({ id: uid(), texto: 'TEXTO', lat, lon, ancla: null, tam: 16, color: '#1d5fb5', fondo: '#ffffff', borde: '#1d5fb5', bw: 3, mayus: true });
 const nuevoTrazo = n => ({ id: uid(), nombre: 'Trazo ' + n, color: '#16a34a', ancho: 7, borde: true, discontinuo: false, visible: true, flechas: { on: true, color: '#1d5fb5', tam: 20, sep: 220 }, segs: [], etiquetas: [] });
 const nuevaEtiqueta = (texto, lat, lon) => ({ id: uid(), texto, lat, lon, giro: 0, visible: true, ...ESTILO_CARTEL });
 function normalizar(j) {
   const d = nuevoProyecto(), base = nuevoTrazo(1);
-  return { ...d, ...j, gris: { ...d.gris, ...(j.gris || {}) }, trazos: (j.trazos || []).map(t => ({ ...base, ...t, flechas: { ...base.flechas, ...(t.flechas || {}) }, etiquetas: (t.etiquetas || []).map(l => ({ ...nuevaEtiqueta('', 0, 0), ...l })) })) };
+  return { ...d, ...j, gris: { ...d.gris, ...(j.gris || {}) }, leyenda: { ...LEY_DEF, ...(j.leyenda || {}) }, marcas: (j.marcas || []).map(m => ({ ...nuevaMarca('prohibido', 0, 0), ...m })), notas: (j.notas || []).map(n => ({ ...nuevaNota(0, 0), ...n })), trazos: (j.trazos || []).map(t => ({ ...base, ...t, flechas: { ...base.flechas, ...(t.flechas || {}) }, etiquetas: (t.etiquetas || []).map(l => ({ ...nuevaEtiqueta('', 0, 0), ...l })) })) };
 }
 function cargar() { try { const j = JSON.parse(lsGet(PROY_KEY, 'null')); if (j && Array.isArray(j.trazos)) return normalizar(j); } catch { /* proyecto dañado */ } return nuevoProyecto(); }
-let tg = 0; const guardar = () => { clearTimeout(tg); tg = setTimeout(() => lsSet(PROY_KEY, JSON.stringify(S.p)), 250); };
+const hist = { pila: [], pos: -1, ult: '' };
+function tomarFoto() { const j = JSON.stringify(S.p); if (j === hist.ult) return; hist.pila = hist.pila.slice(0, hist.pos + 1); hist.pila.push(j); if (hist.pila.length > 60) hist.pila.shift(); hist.pos = hist.pila.length - 1; hist.ult = j; }
+function actualizarHist() { const u = document.getElementById('btnUndo'), r = document.getElementById('btnRedo'); if (u) u.disabled = hist.pos <= 0; if (r) r.disabled = hist.pos >= hist.pila.length - 1; }
+let tg = 0; const guardar = () => { clearTimeout(tg); tg = setTimeout(() => { lsSet(PROY_KEY, JSON.stringify(S.p)); tomarFoto(); actualizarHist(); }, 350); };
+function irHist(dir) {
+  clearTimeout(tg); lsSet(PROY_KEY, JSON.stringify(S.p)); tomarFoto();
+  const n = hist.pos + dir; if (n < 0 || n >= hist.pila.length) return;
+  hist.pos = n; hist.ult = hist.pila[n]; S.p = normalizar(JSON.parse(hist.ult)); S.sel = selVacio(); lsSet(PROY_KEY, hist.ult);
+  aplicarBase(); render(); redibujar(); actualizarHist();
+}
+const deshacerProy = () => irHist(-1), rehacerProy = () => irHist(1);
 
-const S = { p: cargar(), tab: 'trazos', sel: { trazo: null, label: null }, dib: null, hover: null, colocar: false, drag: null, suprimir: false, abreviar: true, netTxt: 'Cargando callejero…', marco: { on: true, fmt: '1080x1080', w: 1080, h: 1080, px: { w: 0, h: 0 } } };
+const selVacio = () => ({ trazo: null, label: null, marca: null, nota: null });
+const S = { p: cargar(), tab: 'trazos', sel: selVacio(), preset: 'itinerario', autoMarcas: true, dib: null, hover: null, colocar: null, drag: null, suprimir: false, abreviar: true, netTxt: 'Cargando callejero…', marco: { on: true, fmt: '1080x1080', w: 1080, h: 1080, px: { w: 0, h: 0 } } };
 const selTrazoObj = () => S.p.trazos.find(t => t.id === S.sel.trazo);
 const buscarEt = id => { for (const t of S.p.trazos) { const l = t.etiquetas.find(x => x.id === id); if (l) return l; } return null; };
 
@@ -37,7 +51,8 @@ function pintar() {
   if (lienzo.width !== Math.round(sz.x * dpr) || lienzo.height !== Math.round(sz.y * dpr)) { lienzo.width = Math.round(sz.x * dpr); lienzo.height = Math.round(sz.y * dpr); lienzo.style.width = sz.x + 'px'; lienzo.style.height = sz.y + 'px'; }
   const ctx = lienzo.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const c = map.getCenter(), m = merc(c.lat, c.lng);
-  hits = dibujar(ctx, crearVista(m[0], m[1], 256 * Math.pow(2, map.getZoom()), sz.x, sz.y, 1), S.p, { ui: true, sel: S.sel, borrador: S.dib ? borradorUI() : null });
+  const fr = S.tab === 'exportar' && S.marco.on && !S.dib && S.marco.px.w ? S.marco.px : null, area = fr ? { x: (sz.x - fr.w) / 2, y: (sz.y - fr.h) / 2, w: fr.w, h: fr.h } : null;
+  hits = dibujar(ctx, crearVista(m[0], m[1], 256 * Math.pow(2, map.getZoom()), sz.x, sz.y, 1), S.p, { ui: true, sel: S.sel, borrador: S.dib ? borradorUI() : null, area });
   actualizarMarco();
 }
 map.on('move zoom resize viewreset', redibujar);
@@ -84,57 +99,91 @@ function etiquetasDe(tramos) {
   for (const t of tramos) { if (!t.name) continue; const L = lengthM(t.pts), b = mejor.get(t.name); if (!b || L > b.L) mejor.set(t.name, { t, L }); }
   return tramos.filter(t => { const b = t.name && mejor.get(t.name); return b && b.t === t && b.L >= 50; }).map(t => { const [la, lo] = puntoMedio(t.pts); return nuevaEtiqueta(textoCalle(t.name), la, lo); });
 }
+const PRESETS = {
+  itinerario: { nombre: 'Itinerario', estilo: { color: '#16a34a', ancho: 7, borde: true, discontinuo: false, flechas: { on: true, color: '#1d5fb5', tam: 20, sep: 220 } } },
+  corte: { nombre: 'Corte', estilo: { color: '#d92d20', ancho: 7, borde: true, discontinuo: false, flechas: { on: false, color: '#d92d20', tam: 20, sep: 220 } } },
+  desvio: { nombre: 'Desvío', estilo: { color: '#16a34a', ancho: 6, borde: false, discontinuo: true, flechas: { on: true, color: '#16a34a', tam: 20, sep: 200 } } },
+};
+const aplicarPreset = (t, k) => Object.assign(t, JSON.parse(JSON.stringify(PRESETS[k].estilo)));
+function marcasAuto(t, k) {
+  const pts = t.segs.flat(); if (!pts.length) return []; const a = pts[0], z = pts[pts.length - 1];
+  if (k === 'itinerario') return [nuevaMarca('salida', a[0], a[1]), ...(lengthM([a, z]) > 60 ? [nuevaMarca('meta', z[0], z[1])] : [])];
+  if (k === 'corte') return [nuevaMarca('prohibido', a[0], a[1]), nuevaMarca('prohibido', z[0], z[1])];
+  return [];
+}
 function terminarDibujo() {
   const d = S.dib; cerrarTramo(d);
   if (!d.segs.length) { aviso('Marca al menos dos puntos'); return; }
   const t = nuevoTrazo(S.p.trazos.length + 1); t.segs = d.segs.map(s => s.path); t.etiquetas = etiquetasDe(d.segs.flatMap(s => s.tramos));
+  if (!d.rehacer) { aplicarPreset(t, S.preset); const n = S.p.trazos.filter(x => x.nombre.startsWith(PRESETS[S.preset].nombre)).length; t.nombre = PRESETS[S.preset].nombre + (n ? ' ' + (n + 1) : ''); if (S.autoMarcas) S.p.marcas.push(...marcasAuto(t, S.preset)); }
   if (d.rehacer) { const o = S.p.trazos.find(x => x.id === d.rehacer); if (o) { o.segs = t.segs; o.etiquetas = t.etiquetas; S.dib = null; S.sel = { trazo: o.id, label: null }; guardar(); render(); redibujar(); return; } }
-  S.p.trazos.push(t); S.dib = null; S.hover = null; S.sel = { trazo: t.id, label: null }; guardar(); render(); redibujar();
+  S.p.trazos.push(t); S.dib = null; S.hover = null; S.sel = { ...selVacio(), trazo: t.id }; guardar(); render(); redibujar();
   aviso(t.etiquetas.length ? `Trazo creado con ${t.etiquetas.length} nombres de calle. Ajústalos en «Nombres».` : 'Trazo creado.');
 }
 function cancelarDibujo() { S.dib = null; S.hover = null; render(); redibujar(); }
 
 /* ───────── Interacción con el mapa ───────── */
+const fijarSel = el => {
+  if (el.k === 'label') { S.sel = { ...selVacio(), trazo: el.tid, label: el.id }; S.tab = 'nombres'; }
+  else if (el.k === 'marca') { S.sel = { ...selVacio(), marca: el.id }; S.tab = 'senales'; }
+  else { S.sel = { ...selVacio(), nota: el.id }; S.tab = 'senales'; }
+};
+function colocarAqui(ll) {
+  const c = S.colocar; S.colocar = null;
+  if (c.k === 'label') { const t = selTrazoObj(); if (!t) return; const l = nuevaEtiqueta('NOMBRE', ll.lat, ll.lng); t.etiquetas.push(l); S.sel = { ...S.sel, label: l.id }; }
+  else if (c.k === 'marca') { const m = nuevaMarca(c.tipo, ll.lat, ll.lng); S.p.marcas.push(m); S.sel = { ...selVacio(), marca: m.id }; }
+  else if (c.k === 'nota') { const n = nuevaNota(ll.lat, ll.lng); S.p.notas.push(n); S.sel = { ...selVacio(), nota: n.id }; }
+  guardar(); render(); redibujar();
+}
 map.on('click', ev => {
   if (S.suprimir) { S.suprimir = false; return; }
   if (S.dib) { addPunto(ev.latlng); return; }
-  if (S.colocar) {
-    const t = selTrazoObj(); S.colocar = false; if (!t) return;
-    const l = nuevaEtiqueta('NOMBRE', ev.latlng.lat, ev.latlng.lng); t.etiquetas.push(l); S.sel.label = l.id; guardar(); render(); redibujar(); return;
-  }
-  const p = ev.containerPoint, l = etiquetaEn(hits, p.x, p.y);
-  if (l) { S.sel = { trazo: l.tid, label: l.id }; if (S.tab !== 'nombres') S.tab = 'nombres'; render(); redibujar(); return; }
+  if (S.colocar) { colocarAqui(ev.latlng); return; }
+  const p = ev.containerPoint, el = elementoEn(hits, p.x, p.y, S.sel);
+  if (el) { fijarSel(el); render(); redibujar(); return; }
   const t = trazoEn(hits, p.x, p.y);
-  if (t) { S.sel = { trazo: t, label: null }; if (S.tab === 'plano') S.tab = 'trazos'; render(); redibujar(); return; }
-  S.sel = { trazo: null, label: null }; render(); redibujar();
+  if (t) { S.sel = { ...selVacio(), trazo: t }; if (S.tab === 'plano' || S.tab === 'senales') S.tab = 'trazos'; render(); redibujar(); return; }
+  S.sel = selVacio(); render(); redibujar();
 });
 map.on('mousemove', ev => {
   if (!S.dib || S.dib.modo !== 'calles' || !net.ready) return;
   if (map._h) return; map._h = true;
   requestAnimationFrame(() => { map._h = false; S.hover = snap(ev.latlng.lat, ev.latlng.lng, Math.max(30, 28 * mppEn(ev.latlng.lat))); redibujar(); });
 });
-/* arrastrar un nombre para colocarlo donde se quiera */
+/* arrastrar nombres, señales y cuadros de texto para colocarlos donde se quiera */
+const objetoArrastrado = d => (d.k === 'label' ? buscarEt(d.id) : d.k === 'marca' ? S.p.marcas.find(x => x.id === d.id) : S.p.notas.find(x => x.id === d.id));
 cont.addEventListener('pointerdown', ev => {
   if (S.dib || S.colocar || ev.button > 0 || ev.target.closest('.leaflet-control')) return;
-  const r = cont.getBoundingClientRect(), h = etiquetaEn(hits, ev.clientX - r.left, ev.clientY - r.top); if (!h) return;
-  map.dragging.disable(); S.drag = { id: h.id, moved: false }; S.sel = { trazo: h.tid, label: h.id };
+  const r = cont.getBoundingClientRect(), el = elementoEn(hits, ev.clientX - r.left, ev.clientY - r.top, S.sel); if (!el) return;
+  map.dragging.disable(); S.drag = { ...el, moved: false }; if (el.k !== 'ancla') fijarSel(el);
   try { cont.setPointerCapture(ev.pointerId); } catch { /* sin captura */ } ev.preventDefault();
 }, true);
 cont.addEventListener('pointermove', ev => {
-  if (!S.drag) return; const r = cont.getBoundingClientRect(), l = buscarEt(S.drag.id); if (!l) return;
-  const ll = map.containerPointToLatLng([ev.clientX - r.left, ev.clientY - r.top]); l.lat = ll.lat; l.lon = ll.lng; S.drag.moved = true; redibujar();
+  if (!S.drag) return; const r = cont.getBoundingClientRect(), ll = map.containerPointToLatLng([ev.clientX - r.left, ev.clientY - r.top]);
+  if (S.drag.k === 'ancla') { const n = S.p.notas.find(x => x.id === S.drag.id); if (!n) return; n.ancla = { lat: ll.lat, lon: ll.lng }; }
+  else { const o = objetoArrastrado(S.drag); if (!o) return; o.lat = ll.lat; o.lon = ll.lng; }
+  S.drag.moved = true; redibujar();
 });
 const finArrastre = () => {
   if (!S.drag) return; map.dragging.enable();
   if (S.drag.moved) { guardar(); S.suprimir = true; setTimeout(() => { S.suprimir = false; }, 60); }
-  S.drag = null; if (S.tab !== 'nombres') S.tab = 'nombres'; render(); redibujar();
+  S.drag = null; render(); redibujar();
 };
 cont.addEventListener('pointerup', finArrastre); cont.addEventListener('pointercancel', finArrastre);
+cont.addEventListener('pointerup', finArrastre); cont.addEventListener('pointercancel', finArrastre);
+function quitarSel() {
+  if (S.sel.label) { quitarEtiqueta(S.sel.label); return; }
+  if (S.sel.marca) { S.p.marcas = S.p.marcas.filter(m => m.id !== S.sel.marca); S.sel.marca = null; }
+  else if (S.sel.nota) { S.p.notas = S.p.notas.filter(n => n.id !== S.sel.nota); S.sel.nota = null; }
+  else return; guardar(); render(); redibujar();
+}
 document.addEventListener('keydown', ev => {
   if (/INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) return;
-  if (ev.key === 'Escape') { if (S.dib) cancelarDibujo(); S.colocar = false; }
-  if ((ev.key === 'Delete' || ev.key === 'Backspace') && S.sel.label) { quitarEtiqueta(S.sel.label); }
-  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z' && S.dib) { ev.preventDefault(); deshacer(); }
+  const ctrl = ev.ctrlKey || ev.metaKey, k = ev.key.toLowerCase();
+  if (ev.key === 'Escape') { if (S.dib) cancelarDibujo(); S.colocar = null; render(); }
+  if (ev.key === 'Delete' || ev.key === 'Backspace') quitarSel();
+  if (ctrl && k === 'z') { ev.preventDefault(); if (S.dib) deshacer(); else if (ev.shiftKey) rehacerProy(); else deshacerProy(); }
+  if (ctrl && k === 'y') { ev.preventDefault(); rehacerProy(); }
 });
 function deshacer() { const d = S.dib; if (d.wps.length) { d.wps.pop(); d.legs.pop(); } else if (d.segs.length) d.segs.pop(); render(); redibujar(); }
 function quitarEtiqueta(id) { for (const t of S.p.trazos) t.etiquetas = t.etiquetas.filter(l => l.id !== id); if (S.sel.label === id) S.sel.label = null; guardar(); render(); redibujar(); }
@@ -167,6 +216,7 @@ function vistaTrazos() {
     ${S.p.trazos.length ? `<div class="lista">${S.p.trazos.map(x => `<div class="fila${x.id === S.sel.trazo ? ' on' : ''}" data-act="selt" data-id="${x.id}"><i style="background:${x.color}"></i><b>${esc(x.nombre)}</b><button class="ico" data-act="vist" data-id="${x.id}" title="${x.visible === false ? 'Mostrar' : 'Ocultar'}">${x.visible === false ? '◌' : '●'}</button></div>`).join('')}</div>` : '<p class="vacio">Aún no hay ningún trazo. Pulsa «Nuevo trazo», marca el inicio y el final del recorrido y seguirá la forma de las calles.</p>'}
     ${t ? `<h3>${esc(t.nombre)}</h3>
       <label class="txtl"><span>Nombre</span><input class="txt" value="${esc(t.nombre)}" data-o="t" data-k="nombre" data-ty="s" data-re="1"></label>
+      <div class="lbl">Estilo rápido</div><div class="chips">${Object.entries(PRESETS).map(([k, p]) => `<button data-act="preset-t" data-p="${k}">${p.nombre}</button>`).join('')}</div>
       <div class="lbl">Color</div>${swatches('t', 'color', t.color)}${cl('t', 'color', 'Otro color', t.color)}
       ${rg('t', 'ancho', 'Grosor', 2, 26, 1, t.ancho)}
       <div class="dos">${ck('t', 'borde', 'Borde blanco', t.borde !== false)}${ck('t', 'discontinuo', 'Discontinuo', t.discontinuo)}</div>
@@ -179,6 +229,7 @@ function vistaDibujo() {
   const msg = !d.wps.length ? (d.segs.length ? 'Pulsa donde empieza el siguiente tramo, o «Terminar».' : 'Pulsa en el mapa el punto de inicio del recorrido.') : 'Pulsa el siguiente punto. Si la ruta no va por la calle que quieres, añade puntos intermedios.';
   return `<h2>Dibujando un trazo</h2>
     <div class="seg"><button data-act="modo" data-m="calles" class="${d.modo === 'calles' ? 'on' : ''}" ${net.ready ? '' : 'disabled'}>Siguiendo calles</button><button data-act="modo" data-m="libre" class="${d.modo === 'libre' ? 'on' : ''}">Libre</button></div>
+    ${d.rehacer ? '' : `<div class="lbl">Tipo de trazo</div><div class="chips">${Object.entries(PRESETS).map(([k, p]) => `<button data-act="preset-nuevo" data-p="${k}" class="${S.preset === k ? 'on' : ''}">${p.nombre}</button>`).join('')}</div>${ck('au', 'autoMarcas', S.preset === 'corte' ? 'Señal de dirección prohibida en los extremos' : S.preset === 'itinerario' ? 'Punto de salida y meta' : 'Señales automáticas', S.autoMarcas)}`}
     <div class="hint">${msg}</div><p class="mut small">Puntos: ${d.wps.length} · Tramos: ${tramos}</p>
     <div class="btns"><button class="btn" data-act="undo">↶ Deshacer</button><button class="btn" data-act="newseg" ${d.wps.length >= 2 ? '' : 'disabled'}>Levantar el lápiz</button></div>
     <div class="btns"><button class="btn" data-act="cancelar">Cancelar</button><button class="btn pri" data-act="terminar" ${(d.segs.length || d.wps.length >= 2) ? '' : 'disabled'}>Terminar ›</button></div>`;
@@ -198,28 +249,43 @@ function vistaNombres() {
     <label class="ck sep"><input type="checkbox" id="abrev" ${S.abreviar ? 'checked' : ''}><span>Abreviar al crear (C/, Avda.)</span></label>
     <p class="mut small">Arrastra un nombre en el mapa para moverlo. El giro se suma a la dirección de la calle.</p>`;
 }
+const iconos = {};
+function icono(tipo) { if (!iconos[tipo]) { const c = document.createElement('canvas'); c.width = c.height = 88; dibujarSenal(c.getContext('2d'), tipo, 44, 46, 66, 1); iconos[tipo] = c.toDataURL(); } return iconos[tipo]; }
+function vistaSenales() {
+  const m = S.sel.marca && S.p.marcas.find(x => x.id === S.sel.marca), n = S.sel.nota && S.p.notas.find(x => x.id === S.sel.nota), L = S.p.leyenda, col = S.colocar;
+  const items = [...S.p.marcas.map(x => ({ k: 'marca', id: x.id, t: SENALES[x.tipo] + (x.texto ? ' · ' + x.texto : ''), ic: icono(x.tipo) })), ...S.p.notas.map(x => ({ k: 'nota', id: x.id, t: x.texto.split('\n')[0], ic: '' }))];
+  return `<h3>Señales</h3><div class="pal">${Object.entries(SENALES).map(([k, l]) => `<button class="pb${col && col.tipo === k ? ' on' : ''}" data-act="poner" data-tipo="${k}"><img src="${icono(k)}" alt="" width="44" height="44"><span>${l}</span></button>`).join('')}</div>
+    ${col && col.k === 'marca' ? `<div class="hint">Pulsa en el mapa donde quieras la señal de «${SENALES[col.tipo]}».</div>` : ''}
+    <h3>Cuadro de texto</h3><button class="btn" data-act="poner-nota">＋ Añadir cuadro de texto</button>${col && col.k === 'nota' ? '<div class="hint">Pulsa en el mapa donde quieras el cuadro.</div>' : ''}
+    ${m ? `<h3>Señal seleccionada</h3>${rg('ma', 'tam', 'Tamaño', 20, 120, 2, m.tam)}<label class="txtl"><span>Texto debajo (opcional)</span><input class="txt" value="${esc(m.texto)}" data-o="ma" data-k="texto" data-ty="s" placeholder="Ej.: C/ San Francisco"></label>${m.texto ? `${rg('ma', 'ttam', 'Tamaño del texto', 8, 30, 1, m.ttam)}${cl('ma', 'color', 'Color del texto', m.color)}` : ''}<div class="btns"><button class="btn dng" data-act="quitar-sel">Quitar señal</button></div>` : ''}
+    ${n ? `<h3>Cuadro seleccionado</h3><label class="txtl"><span>Texto (una línea por renglón)</span><textarea class="txt" rows="3" data-o="no" data-k="texto" data-ty="s">${esc(n.texto)}</textarea></label>${rg('no', 'tam', 'Tamaño', 9, 40, 1, n.tam)}${cl('no', 'color', 'Color del texto', n.color)}${cl('no', 'fondo', 'Color del fondo', n.fondo)}${cl('no', 'borde', 'Color del borde', n.borde)}${rg('no', 'bw', 'Grosor del borde', 1, 8, 1, n.bw)}${ck('no', 'mayus', 'MAYÚSCULAS', n.mayus)}<div class="btns"><button class="btn" data-act="nota-ancla">${n.ancla ? 'Quitar la flecha' : 'Añadir flecha a un punto'}</button><button class="btn dng" data-act="quitar-sel">Quitar cuadro</button></div>${n.ancla ? '<p class="mut small">Arrastra el círculo del extremo de la flecha hasta el punto que quieres señalar.</p>' : ''}` : ''}
+    ${items.length ? `<h3>En el plano</h3><div class="lista">${items.map(x => `<div class="fila${(x.k === 'marca' ? S.sel.marca : S.sel.nota) === x.id ? ' on' : ''}" data-act="sel-el" data-k="${x.k}" data-id="${x.id}">${x.ic ? `<img src="${x.ic}" width="26" height="26" alt="">` : '<i style="background:#1d5fb5"></i>'}<b>${esc(x.t)}</b></div>`).join('')}</div>` : ''}
+    <h3>Leyenda</h3>${ck('le', 'on', 'Mostrar leyenda en el plano', L.on)}
+    ${L.on ? `<div class="lbl">Posición</div><div class="chips">${[['ai', 'Arriba izq.'], ['ad', 'Arriba der.'], ['bi', 'Abajo izq.'], ['bd', 'Abajo der.']].map(([k, l]) => `<button data-act="esq" data-e="${k}" class="${L.esq === k ? 'on' : ''}">${l}</button>`).join('')}</div>${rg('le', 'tam', 'Tamaño del texto', 10, 30, 1, L.tam)}${cl('le', 'borde', 'Color del borde', L.borde)}<p class="mut small">Se rellena sola con los nombres de los trazos, el sentido de la marcha y las señales usadas. Se coloca dentro del marco de la pestaña Exportar.</p>` : ''}`;
+}
 function vistaExportar() {
   const f = S.marco, gris = S.p.base === 'gris';
   return `<h3>Imagen para redes</h3>
     <div class="chips">${FORMATOS.map(([k, l]) => `<button data-act="fmt" data-f="${k}" class="${f.fmt === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     ${ck('mar', 'on', 'Mostrar el marco en el mapa', f.on)}
     <p class="mut small">Mueve y acerca el mapa para que lo que quieres quede dentro del marco. Se descargará solo esa zona.</p>
+    <div class="btns"><button class="btn" data-act="encuadrar">Encuadrar el plano</button><button class="btn" data-act="copiar" ${gris ? '' : 'disabled'}>Copiar imagen</button></div>
     <button class="btn pri big" data-act="png" ${gris ? '' : 'disabled'}>Descargar PNG</button>
     ${gris ? '' : '<p class="mut small">Cambia a «Gris y blanco» en la pestaña Plano para descargar la imagen.</p>'}
     <h3>Proyecto</h3><label class="txtl"><span>Nombre</span><input class="txt" value="${esc(S.p.nombre)}" data-o="p" data-k="nombre" data-ty="s"></label>
     <div class="btns"><button class="btn" data-act="guardar-arch">Guardar archivo</button><button class="btn" data-act="abrir-arch">Abrir archivo</button><button class="btn dng" data-act="nuevo-proy">Plano nuevo</button></div>
     <p class="mut small">El trabajo se guarda solo en este navegador. El archivo sirve de copia o para llevarlo a otro equipo.</p>`;
 }
-const TABS = [['plano', 'Plano'], ['trazos', 'Trazos'], ['nombres', 'Nombres'], ['exportar', 'Exportar']];
+const TABS = [['plano', 'Plano'], ['trazos', 'Trazos'], ['nombres', 'Nombres'], ['senales', 'Señales'], ['exportar', 'Exportar']];
 function render() {
   $('#tabs').innerHTML = TABS.map(([k, l]) => `<button data-act="tab" data-t="${k}" class="${S.tab === k && !S.dib ? 'on' : ''}">${l}</button>`).join('');
   $('#tabs').hidden = !!S.dib;
-  panel.innerHTML = S.dib ? vistaDibujo() : ({ plano: vistaPlano, trazos: vistaTrazos, nombres: vistaNombres, exportar: vistaExportar })[S.tab]();
+  panel.innerHTML = S.dib ? vistaDibujo() : ({ plano: vistaPlano, trazos: vistaTrazos, nombres: vistaNombres, senales: vistaSenales, exportar: vistaExportar })[S.tab]();
   $('#nombre').value = S.p.nombre; actualizarMarco();
 }
 
 /* ───────── Acciones ───────── */
-const ruta = (o, id) => ({ g: () => S.p.gris, p: () => S.p, t: selTrazoObj, fl: () => (selTrazoObj() || {}).flechas, lab: () => buscarEt(id), mar: () => S.marco })[o]();
+const ruta = (o, id) => ({ g: () => S.p.gris, p: () => S.p, t: selTrazoObj, fl: () => (selTrazoObj() || {}).flechas, lab: () => buscarEt(id), mar: () => S.marco, au: () => S, le: () => S.p.leyenda, ma: () => S.p.marcas.find(x => x.id === S.sel.marca), no: () => S.p.notas.find(x => x.id === S.sel.nota) })[o]();
 const fijar = (obj, k, v) => { obj[k] = v; };
 panel.addEventListener('input', ev => {
   const e = ev.target;
@@ -233,7 +299,7 @@ panel.addEventListener('input', ev => {
   if (e.dataset.o === 'g') { cont.style.background = S.p.base === 'gris' ? S.p.gris.fondo : ''; }
   if (e.dataset.o === 'p' && e.dataset.k === 'nombre') $('#nombre').value = v;
   guardar(); redibujar();
-  if (e.type === 'checkbox' && ['fl', 'mar'].includes(e.dataset.o)) { if (e.dataset.o === 'mar') actualizarMarco(); render(); }
+  if (e.type === 'checkbox' && ['fl', 'mar', 'le'].includes(e.dataset.o)) { if (e.dataset.o === 'mar') actualizarMarco(); render(); }
   if (e.type === 'color' && e.dataset.o === 't') { const s = panel.querySelectorAll('.sw'); s.forEach(b => b.classList.toggle('on', b.dataset.v === v)); const f = panel.querySelector('.fila.on i'); if (f) f.style.background = v; }
 });
 $('#nombre').addEventListener('input', ev => { S.p.nombre = ev.target.value; guardar(); });
@@ -257,7 +323,17 @@ const alClic = ev => {
     case 'newseg': cerrarTramo(d); render(); redibujar(); break;
     case 'cancelar': cancelarDibujo(); break;
     case 'terminar': terminarDibujo(); break;
-    case 'colocar': S.colocar = true; render(); break;
+    case 'colocar': S.colocar = { k: 'label' }; render(); break;
+    case 'poner': S.colocar = { k: 'marca', tipo: b.dataset.tipo }; render(); break;
+    case 'poner-nota': S.colocar = { k: 'nota' }; render(); break;
+    case 'sel-el': S.sel = b.dataset.k === 'marca' ? { ...selVacio(), marca: b.dataset.id } : { ...selVacio(), nota: b.dataset.id }; render(); redibujar(); break;
+    case 'quitar-sel': quitarSel(); break;
+    case 'nota-ancla': { const n = S.p.notas.find(x => x.id === S.sel.nota); if (n) { if (n.ancla) n.ancla = null; else { const c = map.getCenter(); n.ancla = { lat: n.lat - 0.0005, lon: n.lon + 0.0004 }; } guardar(); render(); redibujar(); } break; }
+    case 'esq': S.p.leyenda.esq = b.dataset.e; guardar(); render(); redibujar(); break;
+    case 'preset-nuevo': S.preset = b.dataset.p; render(); break;
+    case 'preset-t': if (t) { aplicarPreset(t, b.dataset.p); guardar(); render(); redibujar(); } break;
+    case 'encuadrar': encuadrarTodo(); break;
+    case 'copiar': copiarImagen(); break;
     case 'sell': S.sel.label = b.dataset.id; render(); redibujar(); break;
     case 'quitar-et': quitarEtiqueta(b.dataset.id); break;
     case 'cartel-todos': if (t) { t.etiquetas.forEach(l => Object.assign(l, ESTILO_CARTEL)); guardar(); render(); redibujar(); } break;
@@ -276,15 +352,30 @@ $('#fileProy').addEventListener('change', async ev => {
   catch (e) { aviso('No se pudo abrir el archivo: ' + e.message); }
 });
 function descargar(blob, nombre) { const a = document.createElement('a'), u = URL.createObjectURL(blob); a.href = u; a.download = nombre.replace(/[\\/:*?"<>|]+/g, '-'); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 3000); }
+function generar() {
+  const f = S.marco; actualizarMarco(); if (!f.px.w) { aviso('Abre la pestaña Exportar y activa el marco'); return null; }
+  const c = map.getCenter(), m = merc(c.lat, c.lng); return imagen(S.p, m[0], m[1], map.getZoom(), f.px.w, f.w, f.h);
+}
+function encuadrarTodo() {
+  const pts = [...S.p.trazos.filter(t => t.visible !== false).flatMap(t => t.segs.flat()), ...S.p.marcas.map(m => [m.lat, m.lon]), ...S.p.notas.map(n => [n.lat, n.lon])];
+  if (!pts.length) { aviso('No hay nada que encuadrar todavía'); return; }
+  const sz = map.getSize(), f = S.tab === 'exportar' && S.marco.on && S.marco.px.w ? S.marco.px : { w: sz.x * 0.9, h: sz.y * 0.9 };
+  const px = Math.max(30, (sz.x - f.w) / 2 + 40), py = Math.max(30, (sz.y - f.h) / 2 + 40);
+  map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [px, py], paddingBottomRight: [px, py], maxZoom: 19 });
+}
+async function copiarImagen() {
+  try { const cv = generar(); if (!cv) return; const b = await new Promise(r => cv.toBlob(r, 'image/png')); await navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]); aviso('Imagen copiada: ya puedes pegarla'); }
+  catch { aviso('El navegador no permite copiar la imagen. Usa «Descargar PNG».'); }
+}
 function descargarPNG() {
-  const f = S.marco; actualizarMarco(); if (!f.px.w) { aviso('Abre la pestaña Exportar y activa el marco'); return; }
-  const c = map.getCenter(), m = merc(c.lat, c.lng), cv = imagen(S.p, m[0], m[1], map.getZoom(), f.px.w, f.w, f.h);
+  const f = S.marco, cv = generar(); if (!cv) return;
   cv.toBlob(b => { if (!b) { aviso('No se pudo generar la imagen'); return; } descargar(b, (S.p.nombre || 'plano') + '.png'); aviso(`Imagen ${f.w}×${f.h} descargada`); }, 'image/png');
 }
 
 /* ───────── Arranque ───────── */
 function estadoCalles(txt) { S.netTxt = txt; if (S.tab === 'plano' && !S.dib) { const e = panel.querySelector('.mut.small'); if (e && !panel.querySelector('#irCalle:focus')) render(); } }
-aplicarBase(); render();
+aplicarBase(); render(); tomarFoto(); actualizarHist();
+$('#btnUndo').onclick = deshacerProy; $('#btnRedo').onclick = rehacerProy;
 loadNet(false, estadoCalles).then(() => { render(); redibujar(); });
 window.__plano = { S, map, net, pintar: () => pintar(), hits: () => hits };
 window.__appListo = true;

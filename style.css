@@ -78,3 +78,13 @@ h3:first-child{margin-top:2px}
   .mapa{order:-1}
   #side{border-right:0;border-top:1px solid var(--line)}
 }
+
+.fila2{display:flex;gap:6px;align-items:center}
+.cuad{width:40px;height:40px;border:1px solid #cfd4dc;border-radius:10px;font-size:19px;color:var(--ink);background:#fff;flex:none}
+.cuad:disabled{opacity:.35;cursor:default}
+.pal{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:4px 0 10px}
+.pb{display:flex;align-items:center;gap:9px;border:1px solid #cfd4dc;background:#fff;border-radius:12px;padding:7px 10px;cursor:pointer;text-align:left;font-weight:600;font-size:12.5px;line-height:1.2}
+.pb:hover{background:var(--bg)} .pb.on{border-color:var(--accent);box-shadow:0 0 0 3px rgba(29,95,181,.14)}
+.pb img{flex:none}
+.fila img{flex:none}
+textarea.txt{resize:vertical;font:inherit}

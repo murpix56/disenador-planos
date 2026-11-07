@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc } from './net.js?v=20261108a';
+import { net, merc } from './net.js?v=20261108b';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -36,7 +36,7 @@ function flecha(ctx, x, y, ang, s) {
   ctx.beginPath(); ctx.moveTo(-L / 2, -sw / 2); ctx.lineTo(L / 2 - hl, -sw / 2); ctx.lineTo(L / 2 - hl, -hw / 2); ctx.lineTo(L / 2, 0);
   ctx.lineTo(L / 2 - hl, hw / 2); ctx.lineTo(L / 2 - hl, sw / 2); ctx.lineTo(-L / 2, sw / 2); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore();
 }
-function flechas(ctx, v, t, segs) {
+function flechas(ctx, v, t, segs, evitar = []) {
   const f = t.flechas, k = v.k, size = f.tam * k, sep = f.sep * k; if (sep < 8 || size < 2) return;
   ctx.fillStyle = f.color; ctx.strokeStyle = f.borde || '#ffffff'; ctx.lineWidth = 2 * k; ctx.lineJoin = 'round'; ctx.setLineDash([]);
   for (const s of segs) {
@@ -45,7 +45,9 @@ function flechas(ctx, v, t, segs) {
     while (d < total) {
       while (i < cum.length - 1 && cum[i] < d) i++;
       const a = s[i - 1], b = s[i], seg = cum[i] - cum[i - 1] || 1, u = (d - cum[i - 1]) / seg;
-      flecha(ctx, a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, Math.atan2(b[1] - a[1], b[0] - a[0]), size); d += sep;
+      const ax = a[0] + (b[0] - a[0]) * u, ay = a[1] + (b[1] - a[1]) * u;
+      if (!evitar.some(e => Math.hypot(e.x - ax, e.y - ay) < e.r + size * 0.6)) flecha(ctx, ax, ay, Math.atan2(b[1] - a[1], b[0] - a[0]), size);
+      d += sep;
     }
   }
 }
@@ -58,7 +60,7 @@ function trazo(ctx, v, t, ui, hits, cache) {
   if (ui.ui && ui.sel && ui.sel.trazo === t.id) { ctx.strokeStyle = 'rgba(29,95,181,.28)'; ctx.lineWidth = w + 16; trazar(); }
   if (t.borde !== false && !t.discontinuo) { ctx.strokeStyle = t.bordeColor || '#ffffff'; ctx.lineWidth = w + 5 * k; trazar(); }
   ctx.strokeStyle = t.color; ctx.lineWidth = w; if (t.discontinuo) ctx.setLineDash([w * 2.2, w * 1.6]); trazar(); ctx.setLineDash([]);
-  if (t.flechas && t.flechas.on) flechas(ctx, v, t, segs);
+  if (t.flechas && t.flechas.on) flechas(ctx, v, t, segs, t.etiquetas.filter(l => l.visible !== false).map(l => { const m = merc(l.lat, l.lon), q = v.px(m[0], m[1]); return { x: q[0], y: q[1], r: String(l.texto).length * l.tam * k * 0.33 }; }));
   hits.trazos.push({ id: t.id, segs, w: Math.max(w, 16) });
 }
 
@@ -98,13 +100,119 @@ function borrador(ctx, v, b) {
   if (b.hover) { const m = merc(b.hover.lat, b.hover.lon), [x, y] = v.px(m[0], m[1]); ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.strokeStyle = '#1d5fb5'; ctx.lineWidth = 2.5; ctx.stroke(); }
 }
 
+/* ───────── Señales ───────── */
+export const SENALES = { prohibido: 'Dirección prohibida', obras: 'Obras', peligro: 'Peligro', estacionar: 'Prohibido estacionar', salida: 'Salida / llegada', meta: 'Meta' };
+const sombra = (ctx, k) => { ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 4 * k; ctx.shadowOffsetY = 1.5 * k; };
+const sinSombra = ctx => { ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; };
+function triangulo(ctx, s, k) {
+  const h = s, w = s * 1.12;
+  ctx.beginPath(); ctx.moveTo(0, -h * 0.56); ctx.lineTo(w / 2, h * 0.44); ctx.lineTo(-w / 2, h * 0.44); ctx.closePath();
+  sombra(ctx, k); ctx.fillStyle = '#fff'; ctx.fill(); sinSombra(ctx);
+  ctx.lineWidth = s * 0.12; ctx.strokeStyle = '#d92d20'; ctx.lineJoin = 'round'; ctx.stroke();
+}
+/* Dibuja una señal centrada en (x, y); s = tamaño en píxeles; k = escala (para sombras) */
+export function dibujarSenal(ctx, tipo, x, y, s, k = 1) {
+  ctx.save(); ctx.translate(x, y); ctx.lineJoin = 'round'; ctx.lineCap = 'round'; const r = s / 2;
+  if (tipo === 'prohibido') {
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); sombra(ctx, k); ctx.fillStyle = '#d92d20'; ctx.fill(); sinSombra(ctx);
+    ctx.lineWidth = s * 0.08; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.fillRect(-r * 0.64, -s * 0.085, r * 1.28, s * 0.17);
+  } else if (tipo === 'estacionar') {
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); sombra(ctx, k); ctx.fillStyle = '#1d5fb5'; ctx.fill(); sinSombra(ctx);
+    ctx.lineWidth = s * 0.14; ctx.strokeStyle = '#d92d20'; ctx.beginPath(); ctx.arc(0, 0, r - s * 0.07, 0, 7); ctx.stroke();
+    ctx.lineWidth = s * 0.14; ctx.beginPath(); ctx.moveTo(-r * 0.62, -r * 0.62); ctx.lineTo(r * 0.62, r * 0.62); ctx.stroke();
+    ctx.lineWidth = s * 0.05; ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.stroke();
+  } else if (tipo === 'peligro') {
+    triangulo(ctx, s, k); ctx.fillStyle = '#101828';
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-s * 0.05, -s * 0.2, s * 0.1, s * 0.34, s * 0.04) : ctx.rect(-s * 0.05, -s * 0.2, s * 0.1, s * 0.34); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, s * 0.26, s * 0.06, 0, 7); ctx.fill();
+  } else if (tipo === 'obras') {
+    triangulo(ctx, s, k); ctx.fillStyle = '#101828'; ctx.strokeStyle = '#101828'; ctx.lineWidth = s * 0.075;
+    ctx.beginPath(); ctx.arc(-s * 0.1, -s * 0.0, s * 0.065, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-s * 0.1, s * 0.08); ctx.lineTo(-s * 0.02, s * 0.25); ctx.stroke();
+    ctx.lineWidth = s * 0.07; ctx.beginPath(); ctx.moveTo(-s * 0.02, s * 0.25); ctx.lineTo(-s * 0.13, s * 0.36); ctx.moveTo(-s * 0.02, s * 0.25); ctx.lineTo(s * 0.06, s * 0.36); ctx.stroke();
+    ctx.lineWidth = s * 0.06; ctx.beginPath(); ctx.moveTo(-s * 0.08, s * 0.12); ctx.lineTo(s * 0.1, s * 0.18); ctx.stroke();
+    ctx.lineWidth = s * 0.035; ctx.beginPath(); ctx.moveTo(s * 0.07, s * 0.06); ctx.lineTo(s * 0.2, s * 0.3); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s * 0.1, s * 0.37); ctx.lineTo(s * 0.3, s * 0.37); ctx.lineTo(s * 0.22, s * 0.29); ctx.closePath(); ctx.fill();
+  } else if (tipo === 'salida') {
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); sombra(ctx, k); ctx.fillStyle = '#fff'; ctx.fill(); sinSombra(ctx);
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.74, 0, 7); ctx.fillStyle = '#16a34a'; ctx.fill(); ctx.lineWidth = s * 0.04; ctx.strokeStyle = '#0f7a37'; ctx.stroke();
+  } else if (tipo === 'meta') {
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); sombra(ctx, k); ctx.fillStyle = '#fff'; ctx.fill(); sinSombra(ctx);
+    ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r * 0.78, 0, 7); ctx.clip(); const c = r * 0.78 * 2 / 4;
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { ctx.fillStyle = (i + j) % 2 ? '#fff' : '#101828'; ctx.fillRect(-r * 0.78 + i * c, -r * 0.78 + j * c, c, c); }
+    ctx.restore(); ctx.beginPath(); ctx.arc(0, 0, r * 0.78, 0, 7); ctx.lineWidth = s * 0.05; ctx.strokeStyle = '#101828'; ctx.stroke();
+  }
+  ctx.restore();
+}
+function marca(ctx, v, m, ui, hits) {
+  const k = v.k, mm = merc(m.lat, m.lon), [x, y] = v.px(mm[0], mm[1]), s = m.tam * k;
+  dibujarSenal(ctx, m.tipo, x, y, s, k);
+  if (m.texto) {
+    const size = (m.ttam || 13) * k, lineas = (m.mayus === false ? m.texto : m.texto.toUpperCase()).split('\n');
+    ctx.save(); ctx.font = `800 ${size}px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    lineas.forEach((t, i) => { const yy = y + s * 0.62 + size * 0.7 + i * size * 1.12; ctx.shadowColor = 'rgba(0,0,0,.3)'; ctx.shadowBlur = 3 * k; ctx.shadowOffsetY = k; ctx.lineWidth = size * 0.3; ctx.strokeStyle = m.halo || '#fff'; ctx.strokeText(t, x, yy); ctx.shadowColor = 'transparent'; ctx.fillStyle = m.color || '#1d5fb5'; ctx.fillText(t, x, yy); });
+    ctx.restore();
+  }
+  if (ui.ui && ui.sel && ui.sel.marca === m.id) { ctx.save(); ctx.strokeStyle = '#1d5fb5'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.arc(x, y, s / 2 + 7, 0, 7); ctx.stroke(); ctx.restore(); }
+  hits.marcas.push({ id: m.id, cx: x, cy: y, r: s / 2 + 5 });
+}
+
+/* ───────── Cuadros de texto con flecha ───────── */
+const rr = (ctx, x, y, w, h, r) => { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); };
+function nota(ctx, v, n, ui, hits) {
+  const k = v.k, mm = merc(n.lat, n.lon), [x, y] = v.px(mm[0], mm[1]), size = n.tam * k, lineas = (n.mayus === false ? n.texto : n.texto.toUpperCase()).split('\n');
+  ctx.save(); ctx.font = `800 ${size}px ${FUENTE}`; let ancho = 0; lineas.forEach(t => { ancho = Math.max(ancho, ctx.measureText(t).width); });
+  const pad = size * 0.75, w = ancho + pad * 2, h = lineas.length * size * 1.15 + pad * 0.9;
+  let ax = 0, ay = 0;
+  if (n.ancla) {
+    const am = merc(n.ancla.lat, n.ancla.lon); [ax, ay] = v.px(am[0], am[1]);
+    ctx.lineCap = 'round'; ctx.strokeStyle = n.borde; ctx.lineWidth = Math.max(2, (n.bw || 3)) * k; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ax, ay); ctx.stroke();
+  }
+  rr(ctx, x - w / 2, y - h / 2, w, h, size * 0.6); sombra(ctx, k); ctx.fillStyle = n.fondo; ctx.fill(); sinSombra(ctx);
+  ctx.lineWidth = (n.bw || 3) * k; ctx.strokeStyle = n.borde; ctx.stroke();
+  ctx.fillStyle = n.color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  lineas.forEach((t, i) => ctx.fillText(t, x, y + (i - (lineas.length - 1) / 2) * size * 1.15));
+  if (ui.ui && ui.sel && ui.sel.nota === n.id) {
+    ctx.strokeStyle = '#1d5fb5'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(x - w / 2 - 5, y - h / 2 - 5, w + 10, h + 10); ctx.setLineDash([]);
+    if (n.ancla) { ctx.beginPath(); ctx.arc(ax, ay, 8, 0, 7); ctx.fillStyle = '#fff'; ctx.fill(); ctx.stroke(); }
+  }
+  ctx.restore();
+  hits.notas.push({ id: n.id, cx: x, cy: y, w, h, ax: n.ancla ? ax : null, ay: n.ancla ? ay : null });
+}
+
+/* ───────── Leyenda automática ───────── */
+function leyenda(ctx, v, p, area) {
+  const L = p.leyenda; if (!L || !L.on) return;
+  const k = v.k, size = L.tam * k, filas = [];
+  for (const t of p.trazos) if (t.visible !== false && t.segs.length) filas.push({ k: 'linea', t, txt: t.nombre });
+  if (p.trazos.some(t => t.visible !== false && t.flechas && t.flechas.on)) { const t = p.trazos.find(q => q.visible !== false && q.flechas && q.flechas.on); filas.push({ k: 'flecha', t, txt: 'Sentido de la marcha' }); }
+  [...new Set(p.marcas.map(m => m.tipo))].forEach(tp => filas.push({ k: 'senal', tp, txt: SENALES[tp] }));
+  if (!filas.length) return;
+  ctx.save(); ctx.font = `700 ${size}px ${FUENTE}`; let ancho = 0; filas.forEach(f => { ancho = Math.max(ancho, ctx.measureText(f.txt).width); });
+  const mu = size * 0.7, icono = size * 2.6, paso = size * 1.75, w = mu * 2 + icono + size * 0.7 + ancho, h = mu * 2 + paso * filas.length - size * 0.35, mg = 18 * k;
+  const x0 = L.esq.includes('d') ? area.x + area.w - w - mg : area.x + mg, y0 = L.esq.includes('b') ? area.y + area.h - h - mg : area.y + mg;
+  rr(ctx, x0, y0, w, h, size * 0.5); sombra(ctx, k); ctx.fillStyle = L.fondo; ctx.fill(); sinSombra(ctx); ctx.lineWidth = 2.5 * k; ctx.strokeStyle = L.borde; ctx.stroke();
+  ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  filas.forEach((f, i) => {
+    const yy = y0 + mu + paso * i + paso * 0.4, xi = x0 + mu + icono / 2;
+    if (f.k === 'linea') { ctx.lineCap = 'round'; ctx.setLineDash(f.t.discontinuo ? [size * 0.6, size * 0.45] : []); ctx.strokeStyle = f.t.color; ctx.lineWidth = Math.min(f.t.ancho, 12) * k; ctx.beginPath(); ctx.moveTo(x0 + mu + size * 0.2, yy); ctx.lineTo(x0 + mu + icono - size * 0.2, yy); ctx.stroke(); ctx.setLineDash([]); }
+    else if (f.k === 'flecha') { ctx.fillStyle = f.t.flechas.color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 * k; flecha(ctx, xi, yy, 0, size * 1.1); }
+    else dibujarSenal(ctx, f.tp, xi, yy, size * 1.45, k);
+    ctx.fillStyle = L.color; ctx.font = `700 ${size}px ${FUENTE}`; ctx.fillText(f.txt, x0 + mu + icono + size * 0.7, yy);
+  });
+  ctx.restore();
+}
+
 /* ───────── Dibujo completo ───────── */
 export function dibujar(ctx, v, p, ui = {}) {
-  const hits = { labels: [], trazos: [] }, cache = new Map();
+  const hits = { labels: [], trazos: [], marcas: [], notas: [] }, cache = new Map(), area = ui.area || { x: 0, y: 0, w: v.w, h: v.h };
   ctx.save(); ctx.clearRect(0, 0, v.w, v.h);
   if (p.base === 'gris') { ctx.fillStyle = p.gris.fondo; ctx.fillRect(0, 0, v.w, v.h); calles(ctx, v, p); }
   for (const t of p.trazos) if (t.visible !== false) trazo(ctx, v, t, ui, hits, cache);
   for (const t of p.trazos) if (t.visible !== false) for (const l of t.etiquetas) if (l.visible !== false) etiqueta(ctx, v, t, l, ui, hits, cache);
+  for (const m of p.marcas || []) marca(ctx, v, m, ui, hits);
+  for (const n of p.notas || []) nota(ctx, v, n, ui, hits);
+  leyenda(ctx, v, p, area);
   if (ui.borrador) borrador(ctx, v, ui.borrador);
   ctx.restore(); return hits;
 }
@@ -130,4 +238,12 @@ export function etiquetaEn(hits, x, y) {
 export function imagen(p, cx, cy, zoom, anchoPantalla, outW, outH) {
   const k = outW / anchoPantalla, c = document.createElement('canvas'); c.width = outW; c.height = outH;
   dibujar(c.getContext('2d'), crearVista(cx, cy, 256 * Math.pow(2, zoom) * k, outW, outH, k), p, {}); return c;
+}
+
+/* Elemento bajo el puntero: cuadro de texto, señal o nombre (en ese orden, de arriba abajo) */
+export function elementoEn(hits, x, y, sel = {}) {
+  if (sel.nota) { const n = hits.notas.find(q => q.id === sel.nota); if (n && n.ax != null && Math.hypot(x - n.ax, y - n.ay) < 12) return { k: 'ancla', id: n.id }; }
+  for (let i = hits.notas.length - 1; i >= 0; i--) { const n = hits.notas[i]; if (Math.abs(x - n.cx) <= n.w / 2 + 4 && Math.abs(y - n.cy) <= n.h / 2 + 4) return { k: 'nota', id: n.id }; }
+  for (let i = hits.marcas.length - 1; i >= 0; i--) { const m = hits.marcas[i]; if (Math.hypot(x - m.cx, y - m.cy) <= m.r) return { k: 'marca', id: m.id }; }
+  const l = etiquetaEn(hits, x, y); return l ? { k: 'label', id: l.id, tid: l.tid } : null;
 }

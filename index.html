@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#101828">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261108a">
+<link rel="stylesheet" href="style.css?v=20261108b">
 </head>
 <body>
 <div id="app">
@@ -14,7 +14,7 @@
     <header class="sh">
       <div class="logo"><svg viewBox="0 0 32 32" width="34" height="34" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#e6e6e6"/><path d="M0 11h32M0 21h32M11 0v32M22 0v32" stroke="#fff" stroke-width="3.2"/><path d="M5 26l8-3 6-9 8-4" fill="none" stroke="#16a34a" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <div><b>Diseñador de planos</b><small>Policía Local · Don Benito</small></div></div>
-      <input id="nombre" class="txt" aria-label="Nombre del plano" placeholder="Nombre del plano">
+      <div class="fila2"><input id="nombre" class="txt" aria-label="Nombre del plano" placeholder="Nombre del plano"><button id="btnUndo" class="ico cuad" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" disabled>↶</button><button id="btnRedo" class="ico cuad" title="Rehacer (Ctrl+Mayús+Z)" aria-label="Rehacer" disabled>↷</button></div>
     </header>
     <nav id="tabs" class="tabs"></nav>
     <div id="panel" class="pbody"></div>
@@ -26,8 +26,8 @@
   </main>
 </div>
 <input type="file" id="fileProy" accept=".json,application/json" hidden>
-<script src="boot.js?v=20261108a"></script>
+<script src="boot.js?v=20261108b"></script>
 <script src="vendor/leaflet/leaflet.js"></script>
-<script type="module" src="js/app.js?v=20261108a"></script>
+<script type="module" src="js/app.js?v=20261108b"></script>
 </body>
 </html>
