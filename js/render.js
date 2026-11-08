@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc, manzanas } from './net.js?v=20261108k';
+import { net, merc, manzanas } from './net.js?v=20261108l';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -31,7 +31,7 @@ function calles(ctx, v, p) {
 
 /* Estilo «Beige»: fondo crema, manzanas en tono arena, calles blancas y vías principales amarillentas (fijo, sin teselas: también sale en la imagen descargada) */
 export const TIERRA = { fondo: '#f4f0e6', manzana: '#e9dac0', borde: '#d8c6a2', via: '#ffffff', viaBorde: '#d8c6a2', verde: '#cfe4b3', verdeBorde: '#b4d391' };
-function callesTierra(ctx, v) {
+function callesTierra(ctx, v, p) {
   if (!net.ready) return;
   const k = v.k, halo = Math.min(100 / v.mpp, 900), mg = halo / 2 / v.S;
   const vx0 = v.cx - v.w / 2 / v.S - mg, vx1 = v.cx + v.w / 2 / v.S + mg, vy0 = v.cy - v.h / 2 / v.S - mg, vy1 = v.cy + v.h / 2 / v.S + mg;
@@ -46,7 +46,7 @@ function callesTierra(ctx, v) {
     }
     if (hay) ctx.stroke();
   };
-  const ancho = m => Math.min(70 * k, Math.max(1.3 * k, m / v.mpp)), cas = 2.6 * k;
+  const anc = (p.tierra && p.tierra.ancho) || 1, ancho = m => Math.min(70 * k, Math.max(1.3 * k, m * anc / v.mpp)), cas = 2.6 * k;
   if (halo > 4 * k) pasada([7.5, 10, 13], halo, TIERRA.manzana);       /* las zonas con calles se tiñen de arena: manzanas */
   { /* manzanas: cada espacio entre calles, de un color sólido (colegios y demás edificios incluidos) */
     ctx.fillStyle = TIERRA.manzana;
@@ -338,7 +338,7 @@ export function dibujar(ctx, v, p, ui = {}) {
   const hits = { labels: [], trazos: [], marcas: [], notas: [] }, cache = new Map(), area = ui.area || { x: 0, y: 0, w: v.w, h: v.h };
   ctx.save(); ctx.clearRect(0, 0, v.w, v.h);
   if (p.base === 'gris') { ctx.fillStyle = p.gris.fondo; ctx.fillRect(0, 0, v.w, v.h); calles(ctx, v, p); }
-  else if (p.base === 'tierra') { ctx.fillStyle = TIERRA.fondo; ctx.fillRect(0, 0, v.w, v.h); callesTierra(ctx, v); }
+  else if (p.base === 'tierra') { ctx.fillStyle = TIERRA.fondo; ctx.fillRect(0, 0, v.w, v.h); callesTierra(ctx, v, p); }
   for (const t of p.trazos) if (t.visible !== false) trazo(ctx, v, t, ui, hits, cache);
   for (const t of p.trazos) if (t.visible !== false) for (const l of t.etiquetas) if (l.visible !== false) etiqueta(ctx, v, t, l, ui, hits, cache);
   for (const m of p.marcas || []) marca(ctx, v, m, ui, hits);

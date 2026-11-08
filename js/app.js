@@ -1,22 +1,22 @@
 /* Diseñador de planos · Policía Local de Don Benito (uso personal)
  * Plano gris y blanco (o calles / satélite), recorrido que sigue las calles, color, flechas y nombres a medida, y descarga en PNG. */
-import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108k';
-import { net, CFG, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108k';
-import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108k';
+import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108l';
+import { net, CFG, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108l';
+import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108l';
 
 /* ───────── Proyecto ───────── */
 const PROY_KEY = 'plano.proyecto.v1';
 const PALETA = ['#16a34a', '#d92d20', '#f79009', '#1d5fb5', '#7a5af8', '#101828'];
 const FORMATOS = [['1080x1080', 'Cuadrado 1080×1080'], ['1080x1350', 'Vertical 1080×1350'], ['1200x630', 'Horizontal 1200×630'], ['2160x2160', 'Cuadrado HD 2160×2160']];
 const LEY_DEF = { on: false, esq: 'bi', ocultos: ['s:salida', 's:meta'], tam: 15, borde: '#d92d20', fondo: '#ffffff', color: '#101828' };
-const nuevoProyecto = () => ({ nombre: 'Plano sin título', base: 'gris', gris: { fondo: '#e6e6e6', calle: '#ffffff', ancho: 1 }, trazos: [], marcas: [], notas: [], leyenda: { ...LEY_DEF } });
+const nuevoProyecto = () => ({ nombre: 'Plano sin título', base: 'gris', gris: { fondo: '#e6e6e6', calle: '#ffffff', ancho: 1 }, tierra: { ancho: 1 }, trazos: [], marcas: [], notas: [], leyenda: { ...LEY_DEF } });
 const nuevaMarca = (tipo, lat, lon) => ({ id: uid(), tipo, lat, lon, tam: 40, rot: 0, texto: '', ttam: 13, color: '#1d5fb5', halo: '#ffffff', mayus: true });
 const nuevaNota = (lat, lon) => ({ id: uid(), texto: 'TEXTO', lat, lon, ancla: null, tam: 16, color: '#1d5fb5', fondo: '#ffffff', borde: '#1d5fb5', bw: 3, mayus: true });
 const nuevoTrazo = n => ({ id: uid(), nombre: 'Trazo ' + n, color: '#16a34a', ancho: 7, borde: true, discontinuo: false, visible: true, flechas: { on: true, color: '#1d5fb5', tam: 20, sep: 220 }, segs: [], etiquetas: [] });
 const nuevaEtiqueta = (texto, lat, lon) => ({ id: uid(), texto, lat, lon, giro: 0, visible: true, ...ESTILO_CARTEL });
 function normalizar(j) {
   const d = nuevoProyecto(), base = nuevoTrazo(1);
-  return { ...d, ...j, gris: { ...d.gris, ...(j.gris || {}) }, leyenda: { ...LEY_DEF, ...(j.leyenda || {}) }, marcas: (j.marcas || []).map(m => ({ ...nuevaMarca('prohibido', 0, 0), ...m })), notas: (j.notas || []).map(n => ({ ...nuevaNota(0, 0), ...n })), trazos: (j.trazos || []).map(t => ({ ...base, ...t, flechas: { ...base.flechas, ...(t.flechas || {}) }, etiquetas: (t.etiquetas || []).map(l => ({ ...nuevaEtiqueta('', 0, 0), ...l })) })) };
+  return { ...d, ...j, gris: { ...d.gris, ...(j.gris || {}) }, tierra: { ...d.tierra, ...(j.tierra || {}) }, leyenda: { ...LEY_DEF, ...(j.leyenda || {}) }, marcas: (j.marcas || []).map(m => ({ ...nuevaMarca('prohibido', 0, 0), ...m })), notas: (j.notas || []).map(n => ({ ...nuevaNota(0, 0), ...n })), trazos: (j.trazos || []).map(t => ({ ...base, ...t, flechas: { ...base.flechas, ...(t.flechas || {}) }, etiquetas: (t.etiquetas || []).map(l => ({ ...nuevaEtiqueta('', 0, 0), ...l })) })) };
 }
 function cargar() { try { const j = JSON.parse(lsGet(PROY_KEY, 'null')); if (j && Array.isArray(j.trazos)) return normalizar(j); } catch { /* proyecto dañado */ } return nuevoProyecto(); }
 const hist = { pila: [], pos: -1, ult: '' };
@@ -248,7 +248,7 @@ function vistaPlano() {
   const g = S.p.gris, B = [['gris', 'Gris y blanco (personalizable)'], ['tierra', 'Beige (tonos tierra)'], ['osm', 'Calles (OpenStreetMap)'], ['sat', 'Satélite (PNOA)']];
   return `<h3>Fondo del plano</h3>
     <div class="selmuestra"><select class="txt" data-base="1" aria-label="Fondo del plano">${B.map(([k, l]) => `<option value="${k}"${S.p.base === k ? ' selected' : ''}>${l}</option>`).join('')}</select><span id="muestraBase" class="muestra" style="${estiloMuestra()}" title="Muestra del fondo elegido"></span></div>
-    ${S.p.base === 'gris' ? `<div class="card grp">${cl('g', 'fondo', 'Color del fondo', g.fondo)}${cl('g', 'calle', 'Color de las calles', g.calle)}${rg('g', 'ancho', 'Grosor de las calles', 0.5, 2, 0.05, g.ancho)}<button class="btn" data-act="gris-def">Restablecer colores</button></div>` : `<p class="mut small">${S.p.base === 'tierra' ? 'Estilo fijo (fondo crema, manzanas en arena, calles blancas, vías principales amarillentas y zonas verdes de OpenStreetMap: parques, jardines y césped). También sale en la imagen descargada.' : 'La descarga de imagen solo está disponible con los fondos «Gris y blanco» y «Beige». Con calles o satélite, usa la captura de pantalla.'}</p>`}
+    ${S.p.base === 'gris' ? `<div class="card grp">${cl('g', 'fondo', 'Color del fondo', g.fondo)}${cl('g', 'calle', 'Color de las calles', g.calle)}${rg('g', 'ancho', 'Grosor de las calles', 0.5, 2, 0.05, g.ancho)}<button class="btn" data-act="gris-def">Restablecer colores</button></div>` : `${S.p.base === 'tierra' ? `<div class="card grp">${rg('ti', 'ancho', 'Grosor de las calles', 0.5, 2, 0.05, S.p.tierra.ancho)}<button class="btn" data-act="tierra-def">Restablecer grosor</button></div>` : ''}<p class="mut small">${S.p.base === 'tierra' ? 'Colores fijos (fondo crema, manzanas en arena, calles blancas y zonas verdes de OpenStreetMap: parques, jardines y césped). También sale en la imagen descargada.' : 'La descarga de imagen solo está disponible con los fondos «Gris y blanco» y «Beige». Con calles o satélite, usa la captura de pantalla.'}</p>`}
     <h3>Callejero de Don Benito</h3><p class="mut small">${esc(S.netTxt)}</p><button class="btn" data-act="red-calles">Descargar de nuevo</button>
     <h3>Ir a una calle</h3><input id="irCalle" class="txt" list="listaCalles" placeholder="Escribe el nombre de la calle…" autocomplete="off"><datalist id="listaCalles"></datalist>`;
 }
@@ -340,7 +340,7 @@ function render() {
 }
 
 /* ───────── Acciones ───────── */
-const ruta = (o, id) => ({ g: () => S.p.gris, p: () => S.p, t: selTrazoObj, fl: () => (selTrazoObj() || {}).flechas, lab: () => buscarEt(id), mar: () => S.marco, au: () => S, le: () => S.p.leyenda, ma: () => S.p.marcas.find(x => x.id === S.sel.marca), no: () => S.p.notas.find(x => x.id === S.sel.nota) })[o]();
+const ruta = (o, id) => ({ g: () => S.p.gris, ti: () => S.p.tierra, p: () => S.p, t: selTrazoObj, fl: () => (selTrazoObj() || {}).flechas, lab: () => buscarEt(id), mar: () => S.marco, au: () => S, le: () => S.p.leyenda, ma: () => S.p.marcas.find(x => x.id === S.sel.marca), no: () => S.p.notas.find(x => x.id === S.sel.nota) })[o]();
 const fijar = (obj, k, v) => { obj[k] = v; };
 panel.addEventListener('input', ev => {
   const e = ev.target;
@@ -366,6 +366,7 @@ const alClic = ev => {
   switch (act) {
     case 'tab': S.tab = b.dataset.t; render(); redibujar(); break;
     case 'base': S.p.base = b.dataset.b; aplicarBase(); guardar(); render(); break;
+    case 'tierra-def': S.p.tierra = nuevoProyecto().tierra; guardar(); render(); redibujar(); break;
     case 'gris-def': S.p.gris = nuevoProyecto().gris; aplicarBase(); guardar(); render(); break;
     case 'red-calles': loadNet(true, estadoCalles).then(() => { render(); redibujar(); }); if (S.p.base === 'tierra') loadVerdes(true).then(() => redibujar()); break;
     case 'nuevo': S.dib = nuevoBorrador(); S.sel = { trazo: S.sel.trazo, label: null }; render(); redibujar(); if (!net.ready) aviso('El callejero no está cargado: trazado libre'); break;
