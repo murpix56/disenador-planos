@@ -16,6 +16,8 @@ Herramienta **personal** (de un subinspector de la Policía Local de Don Benito)
 - **Señales** (dibujadas con canvas, `dibujarSenal` en `js/render.js`): dirección prohibida, obras, peligro, prohibido estacionar, salida/llegada, meta; arrastrables, con tamaño y texto debajo. **Cuadros de texto** con flecha. **Leyenda automática** (se coloca en una esquina del marco de exportación).
 - **Leyenda**: posición en desplegable y filas configurables (`leyenda.ocultos`; por defecto oculta salida y meta). Abreviaturas: C/, Avda., Ctra., Pza., Pº, Trv., Cno., Cjón., Gta.
 - **Exportar** PNG (1080×1080, 1080×1350, 1200×630, 2160×2160) de la zona dentro de un **marco** sobre el mapa; «Encuadrar el plano»; «Copiar imagen». **Solo con el fondo gris** (con teselas se usa captura de pantalla).
+- **Mis planos**: lista de planos guardados en el navegador (`plano.biblioteca.v1`, con la vista del mapa); un plano guardado se actualiza solo. Más archivo `.json`.
+- Interfaz: pestañas con icono, tarjetas, interruptores y desplegables con el mismo estilo.
 - Deshacer/rehacer (historial de 60 pasos), guardado automático en el navegador y archivo `.json` (guardar/abrir).
 
 ## Arquitectura

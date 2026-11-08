@@ -1,8 +1,8 @@
 /* Diseñador de planos · Policía Local de Don Benito (uso personal)
  * Plano gris y blanco (o calles / satélite), recorrido que sigue las calles, color, flechas y nombres a medida, y descarga en PNG. */
-import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108c';
-import { net, CFG, loadNet, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108c';
-import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, ESTILO_CARTEL } from './render.js?v=20261108c';
+import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108d';
+import { net, CFG, loadNet, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108d';
+import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, ESTILO_CARTEL } from './render.js?v=20261108d';
 
 /* ───────── Proyecto ───────── */
 const PROY_KEY = 'plano.proyecto.v1';
@@ -22,7 +22,36 @@ function cargar() { try { const j = JSON.parse(lsGet(PROY_KEY, 'null')); if (j &
 const hist = { pila: [], pos: -1, ult: '' };
 function tomarFoto() { const j = JSON.stringify(S.p); if (j === hist.ult) return; hist.pila = hist.pila.slice(0, hist.pos + 1); hist.pila.push(j); if (hist.pila.length > 60) hist.pila.shift(); hist.pos = hist.pila.length - 1; hist.ult = j; }
 function actualizarHist() { const u = document.getElementById('btnUndo'), r = document.getElementById('btnRedo'); if (u) u.disabled = hist.pos <= 0; if (r) r.disabled = hist.pos >= hist.pila.length - 1; }
-let tg = 0; const guardar = () => { clearTimeout(tg); tg = setTimeout(() => { lsSet(PROY_KEY, JSON.stringify(S.p)); tomarFoto(); actualizarHist(); }, 350); };
+let tg = 0; const guardar = () => { clearTimeout(tg); tg = setTimeout(() => { lsSet(PROY_KEY, JSON.stringify(S.p)); tomarFoto(); actualizarHist(); if (S.p.libId && leerBib().some(x => x.id === S.p.libId)) guardarEnBib(true); }, 350); };
+
+/* ───────── Mis planos (lista guardada en este navegador) ───────── */
+const BIB_KEY = 'plano.biblioteca.v1';
+function leerBib() { try { const j = JSON.parse(lsGet(BIB_KEY, '[]')); return Array.isArray(j) ? j : []; } catch { return []; } }
+function escribirBib(l) { if (!lsSet(BIB_KEY, JSON.stringify(l))) aviso('No hay espacio en el navegador para guardar. Usa «Guardar archivo».'); }
+const vistaMapa = () => { const c = map.getCenter(); return { lat: c.lat, lng: c.lng, zoom: map.getZoom() }; };
+function guardarEnBib(silencio) {
+  const l = leerBib(); if (!S.p.libId) S.p.libId = uid();
+  const e = { id: S.p.libId, nombre: S.p.nombre || 'Plano sin título', fecha: Date.now(), p: JSON.parse(JSON.stringify(S.p)), vista: vistaMapa() };
+  const i = l.findIndex(x => x.id === e.id); if (i >= 0) l[i] = e; else l.unshift(e);
+  escribirBib(l); if (!silencio) { lsSet(PROY_KEY, JSON.stringify(S.p)); aviso('Plano guardado en «Mis planos»'); render(); }
+}
+function abrirDeBib(id) {
+  const e = leerBib().find(x => x.id === id); if (!e) return;
+  if (!S.p.libId && S.p.trazos.length && !confirm('El plano actual no está guardado en «Mis planos». ¿Abrir otro y descartarlo?')) return;
+  S.p = normalizar({ ...e.p, libId: e.id }); S.sel = selVacio(); S.dib = null; hist.pila = []; hist.pos = -1; hist.ult = '';
+  lsSet(PROY_KEY, JSON.stringify(S.p)); tomarFoto(); actualizarHist(); aplicarBase();
+  if (e.vista) map.setView([e.vista.lat, e.vista.lng], e.vista.zoom, { animate: false });
+  render(); redibujar(); aviso('Plano abierto: ' + e.nombre);
+}
+function duplicarBib(id) {
+  const l = leerBib(), e = l.find(x => x.id === id); if (!e) return;
+  const c = JSON.parse(JSON.stringify(e)); c.id = uid(); c.nombre = e.nombre + ' (copia)'; c.p.nombre = c.nombre; c.p.libId = c.id; c.fecha = Date.now();
+  l.unshift(c); escribirBib(l); render(); aviso('Copia creada');
+}
+function borrarDeBib(id) { escribirBib(leerBib().filter(x => x.id !== id)); if (S.p.libId === id) { delete S.p.libId; lsSet(PROY_KEY, JSON.stringify(S.p)); } render(); }
+const fechaCorta = t => new Date(t).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+let tv = 0; /* recuerda la vista del mapa (y la del plano guardado) */
+const guardarVista = () => { clearTimeout(tv); tv = setTimeout(() => { const v = vistaMapa(); lsSet('plano.vista.v1', JSON.stringify(v)); if (S.p.libId) { const l = leerBib(), e = l.find(x => x.id === S.p.libId); if (e) { e.vista = v; escribirBib(l); } } }, 500); };
 function irHist(dir) {
   clearTimeout(tg); lsSet(PROY_KEY, JSON.stringify(S.p)); tomarFoto();
   const n = hist.pos + dir; if (n < 0 || n >= hist.pila.length) return;
@@ -43,6 +72,7 @@ const bases = {
   osm: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, crossOrigin: true }),
   sat: L.tileLayer('https://www.ign.es/wmts/pnoa-ma?service=WMTS&request=GetTile&version=1.0.0&layer=OI.OrthoimageCoverage&style=default&tilematrixset=GoogleMapsCompatible&format=image/jpeg&tilematrix={z}&tilerow={y}&tilecol={x}', { maxZoom: 19, crossOrigin: true }),
 };
+try { const v = JSON.parse(lsGet('plano.vista.v1', 'null')); if (v && isFinite(v.lat) && isFinite(v.lng) && isFinite(v.zoom)) map.setView([v.lat, v.lng], v.zoom, { animate: false }); } catch { /* sin vista guardada */ }
 const cont = map.getContainer(), lienzo = document.createElement('canvas'); lienzo.className = 'capa'; cont.appendChild(lienzo);
 let raf = 0, hits = { labels: [], trazos: [] };
 const redibujar = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; pintar(); }); };
@@ -55,7 +85,7 @@ function pintar() {
   hits = dibujar(ctx, crearVista(m[0], m[1], 256 * Math.pow(2, map.getZoom()), sz.x, sz.y, 1), S.p, { ui: true, sel: S.sel, borrador: S.dib ? borradorUI() : null, area });
   actualizarMarco();
 }
-map.on('move zoom resize viewreset', redibujar);
+map.on('move zoom resize viewreset', redibujar); map.on('moveend', guardarVista);
 new ResizeObserver(() => { map.invalidateSize(); redibujar(); }).observe(cont);
 function aplicarBase() {
   Object.values(bases).forEach(b => { if (map.hasLayer(b)) map.removeLayer(b); });
@@ -207,7 +237,7 @@ function vistaPlano() {
   const g = S.p.gris, B = [['gris', 'Gris y blanco'], ['osm', 'Calles'], ['sat', 'Satélite']];
   return `<h3>Fondo del plano</h3>
     <div class="seg">${B.map(([k, l]) => `<button data-act="base" data-b="${k}" class="${S.p.base === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-    ${S.p.base === 'gris' ? `<div class="grp">${cl('g', 'fondo', 'Color del fondo', g.fondo)}${cl('g', 'calle', 'Color de las calles', g.calle)}${rg('g', 'ancho', 'Grosor de las calles', 0.5, 2, 0.05, g.ancho)}<button class="btn" data-act="gris-def">Restablecer colores</button></div>` : '<p class="mut small">La descarga de imagen solo está disponible con el plano gris y blanco. Con calles o satélite, usa la captura de pantalla.</p>'}
+    ${S.p.base === 'gris' ? `<div class="card grp">${cl('g', 'fondo', 'Color del fondo', g.fondo)}${cl('g', 'calle', 'Color de las calles', g.calle)}${rg('g', 'ancho', 'Grosor de las calles', 0.5, 2, 0.05, g.ancho)}<button class="btn" data-act="gris-def">Restablecer colores</button></div>` : '<p class="mut small">La descarga de imagen solo está disponible con el plano gris y blanco. Con calles o satélite, usa la captura de pantalla.</p>'}
     <h3>Callejero de Don Benito</h3><p class="mut small">${esc(S.netTxt)}</p><button class="btn" data-act="red-calles">Descargar de nuevo</button>
     <h3>Ir a una calle</h3><input id="irCalle" class="txt" list="listaCalles" placeholder="Escribe el nombre de la calle…" autocomplete="off"><datalist id="listaCalles"></datalist>`;
 }
@@ -215,14 +245,14 @@ function vistaTrazos() {
   const t = selTrazoObj();
   return `<button class="btn pri big" data-act="nuevo">＋ Nuevo trazo</button>
     ${S.p.trazos.length ? `<div class="lista">${S.p.trazos.map(x => `<div class="fila${x.id === S.sel.trazo ? ' on' : ''}" data-act="selt" data-id="${x.id}"><i style="background:${x.color}"></i><b>${esc(x.nombre)}</b><button class="ico" data-act="vist" data-id="${x.id}" title="${x.visible === false ? 'Mostrar' : 'Ocultar'}">${x.visible === false ? '◌' : '●'}</button></div>`).join('')}</div>` : '<p class="vacio">Aún no hay ningún trazo. Pulsa «Nuevo trazo», marca el inicio y el final del recorrido y seguirá la forma de las calles.</p>'}
-    ${t ? `<h3>${esc(t.nombre)}</h3>
+    ${t ? `<h3>${esc(t.nombre)}</h3><div class="card">
       <label class="txtl"><span>Nombre</span><input class="txt" value="${esc(t.nombre)}" data-o="t" data-k="nombre" data-ty="s" data-re="1"></label>
-      <div class="lbl">Estilo rápido</div><div class="chips">${Object.entries(PRESETS).map(([k, p]) => `<button data-act="preset-t" data-p="${k}">${p.nombre}</button>`).join('')}</div>
+      <div class="lbl">Estilo rápido</div><div class="seg">${Object.entries(PRESETS).map(([k, p]) => `<button data-act="preset-t" data-p="${k}">${p.nombre}</button>`).join('')}</div>
       <div class="lbl">Color</div>${swatches('t', 'color', t.color)}${cl('t', 'color', 'Otro color', t.color)}
       ${rg('t', 'ancho', 'Grosor', 2, 26, 1, t.ancho)}
       <div class="dos">${ck('t', 'borde', 'Borde blanco', t.borde !== false)}${ck('t', 'discontinuo', 'Discontinuo', t.discontinuo)}</div>
       <h3>Flechas de sentido</h3>${ck('fl', 'on', 'Mostrar flechas', t.flechas.on)}
-      ${t.flechas.on ? `${cl('fl', 'color', 'Color de la flecha', t.flechas.color)}${rg('fl', 'tam', 'Tamaño', 8, 44, 1, t.flechas.tam)}${rg('fl', 'sep', 'Separación', 80, 520, 10, t.flechas.sep)}` : ''}
+      ${t.flechas.on ? `${cl('fl', 'color', 'Color de la flecha', t.flechas.color)}${rg('fl', 'tam', 'Tamaño', 8, 44, 1, t.flechas.tam)}${rg('fl', 'sep', 'Separación', 80, 520, 10, t.flechas.sep)}` : ''}</div>
       <div class="btns"><button class="btn" data-act="rehacer">Volver a dibujar</button><button class="btn" data-act="dupt">Duplicar</button><button class="btn dng" data-act="delt" data-id="${t.id}">Eliminar</button></div>` : ''}`;
 }
 function vistaDibujo() {
@@ -230,7 +260,7 @@ function vistaDibujo() {
   const msg = !d.wps.length ? (d.segs.length ? 'Pulsa donde empieza el siguiente tramo, o «Terminar».' : 'Pulsa en el mapa el punto de inicio del recorrido.') : 'Pulsa el siguiente punto. Si la ruta no va por la calle que quieres, añade puntos intermedios.';
   return `<h2>Dibujando un trazo</h2>
     <div class="seg"><button data-act="modo" data-m="calles" class="${d.modo === 'calles' ? 'on' : ''}" ${net.ready ? '' : 'disabled'}>Siguiendo calles</button><button data-act="modo" data-m="libre" class="${d.modo === 'libre' ? 'on' : ''}">Libre</button></div>
-    ${d.rehacer ? '' : `<div class="lbl">Tipo de trazo</div><div class="chips">${Object.entries(PRESETS).map(([k, p]) => `<button data-act="preset-nuevo" data-p="${k}" class="${S.preset === k ? 'on' : ''}">${p.nombre}</button>`).join('')}</div>${ck('au', 'autoMarcas', S.preset === 'corte' ? 'Señal de dirección prohibida en los extremos' : S.preset === 'itinerario' ? 'Punto de salida y meta' : 'Señales automáticas', S.autoMarcas)}`}
+    ${d.rehacer ? '' : `<div class="lbl">Tipo de trazo</div><div class="seg">${Object.entries(PRESETS).map(([k, p]) => `<button data-act="preset-nuevo" data-p="${k}" class="${S.preset === k ? 'on' : ''}">${p.nombre}</button>`).join('')}</div>${ck('au', 'autoMarcas', S.preset === 'corte' ? 'Señal de dirección prohibida en los extremos' : S.preset === 'itinerario' ? 'Punto de salida y meta' : 'Señales automáticas', S.autoMarcas)}`}
     <div class="hint">${msg}</div><p class="mut small">Puntos: ${d.wps.length} · Tramos: ${tramos}</p>
     <div class="btns"><button class="btn" data-act="undo">↶ Deshacer</button><button class="btn" data-act="newseg" ${d.wps.length >= 2 ? '' : 'disabled'}>Levantar el lápiz</button></div>
     <div class="btns"><button class="btn" data-act="cancelar">Cancelar</button><button class="btn pri" data-act="terminar" ${(d.segs.length || d.wps.length >= 2) ? '' : 'disabled'}>Terminar ›</button></div>`;
@@ -242,10 +272,10 @@ function vistaNombres() {
     <div class="btns"><button class="btn" data-act="colocar">＋ Añadir nombre</button><button class="btn" data-act="cartel-todos" title="Aplica el estilo de cartel (azul, mayúsculas, borde blanco) a todos">Estilo cartel</button></div>
     ${S.colocar ? '<div class="hint">Pulsa en el mapa donde quieras el nombre.</div>' : ''}
     ${t.etiquetas.length ? `<div class="lista">${t.etiquetas.map(x => `<div class="fila${x.id === S.sel.label ? ' on' : ''}"><label class="vis"><input type="checkbox" ${x.visible !== false ? 'checked' : ''} data-o="lab" data-id="${x.id}" data-k="visible" data-ty="b" title="Mostrar u ocultar"></label><input class="txt" value="${esc(x.texto)}" data-o="lab" data-id="${x.id}" data-k="texto" data-ty="s" data-foco="${x.id}"><button class="ico" data-act="sell" data-id="${x.id}" title="Editar estilo">✎</button></div>`).join('')}</div>` : '<p class="vacio">Este trazo no tiene nombres. Añade uno o vuelve a dibujarlo siguiendo calles.</p>'}
-    ${l ? `<h3>Estilo del nombre</h3>
+    ${l ? `<h3>Estilo del nombre</h3><div class="card">
       ${rg('lab', 'tam', 'Tamaño', 8, 40, 1, l.tam, l.id)}${cl('lab', 'color', 'Color del texto', l.color, l.id)}${cl('lab', 'halo', 'Color del borde', l.halo, l.id)}
       ${rg('lab', 'giro', 'Giro (°)', -90, 90, 1, l.giro, l.id)}
-      <div class="dos">${ck('lab', 'negrita', 'Negrita', l.negrita, l.id)}${ck('lab', 'mayus', 'MAYÚSCULAS', l.mayus, l.id)}</div>
+      <div class="dos">${ck('lab', 'negrita', 'Negrita', l.negrita, l.id)}${ck('lab', 'mayus', 'MAYÚSCULAS', l.mayus, l.id)}</div></div>
       <div class="btns"><button class="btn" data-act="estilo-todos">Usar en todos</button><button class="btn dng" data-act="quitar-et" data-id="${l.id}">Quitar</button></div>` : ''}
     <label class="ck sep"><input type="checkbox" id="abrev" ${S.abreviar ? 'checked' : ''}><span>Abreviar al crear (C/, Avda., Pza., Pº, Trv., Cno.)</span></label>
     <p class="mut small">Arrastra un nombre en el mapa para moverlo. El giro se suma a la dirección de la calle.</p>`;
@@ -258,30 +288,35 @@ function vistaSenales() {
   return `<h3>Señales</h3><div class="pal">${Object.entries(SENALES).map(([k, l]) => `<button class="pb${col && col.tipo === k ? ' on' : ''}" data-act="poner" data-tipo="${k}"><img src="${icono(k)}" alt="" width="44" height="44"><span>${l}</span></button>`).join('')}</div>
     ${col && col.k === 'marca' ? `<div class="hint">Pulsa en el mapa donde quieras la señal de «${SENALES[col.tipo]}».</div>` : ''}
     <h3>Cuadro de texto</h3><button class="btn" data-act="poner-nota">＋ Añadir cuadro de texto</button>${col && col.k === 'nota' ? '<div class="hint">Pulsa en el mapa donde quieras el cuadro.</div>' : ''}
-    ${m ? `<h3>Señal seleccionada</h3>${rg('ma', 'tam', 'Tamaño', 20, 120, 2, m.tam)}<label class="txtl"><span>Texto debajo (opcional)</span><input class="txt" value="${esc(m.texto)}" data-o="ma" data-k="texto" data-ty="s" placeholder="Ej.: C/ San Francisco"></label>${m.texto ? `${rg('ma', 'ttam', 'Tamaño del texto', 8, 30, 1, m.ttam)}${cl('ma', 'color', 'Color del texto', m.color)}` : ''}<div class="btns"><button class="btn dng" data-act="quitar-sel">Quitar señal</button></div>` : ''}
-    ${n ? `<h3>Cuadro seleccionado</h3><label class="txtl"><span>Texto (una línea por renglón)</span><textarea class="txt" rows="3" data-o="no" data-k="texto" data-ty="s">${esc(n.texto)}</textarea></label>${rg('no', 'tam', 'Tamaño', 9, 40, 1, n.tam)}${cl('no', 'color', 'Color del texto', n.color)}${cl('no', 'fondo', 'Color del fondo', n.fondo)}${cl('no', 'borde', 'Color del borde', n.borde)}${rg('no', 'bw', 'Grosor del borde', 1, 8, 1, n.bw)}${ck('no', 'mayus', 'MAYÚSCULAS', n.mayus)}<div class="btns"><button class="btn" data-act="nota-ancla">${n.ancla ? 'Quitar la flecha' : 'Añadir flecha a un punto'}</button><button class="btn dng" data-act="quitar-sel">Quitar cuadro</button></div>${n.ancla ? '<p class="mut small">Arrastra el círculo del extremo de la flecha hasta el punto que quieres señalar.</p>' : ''}` : ''}
+    ${m ? `<h3>Señal seleccionada</h3><div class="card">${rg('ma', 'tam', 'Tamaño', 20, 120, 2, m.tam)}<label class="txtl"><span>Texto debajo (opcional)</span><input class="txt" value="${esc(m.texto)}" data-o="ma" data-k="texto" data-ty="s" placeholder="Ej.: C/ San Francisco"></label>${m.texto ? `${rg('ma', 'ttam', 'Tamaño del texto', 8, 30, 1, m.ttam)}${cl('ma', 'color', 'Color del texto', m.color)}` : ''}</div><div class="btns"><button class="btn dng" data-act="quitar-sel">Quitar señal</button></div>` : ''}
+    ${n ? `<h3>Cuadro seleccionado</h3><div class="card"><label class="txtl"><span>Texto (una línea por renglón)</span><textarea class="txt" rows="3" data-o="no" data-k="texto" data-ty="s">${esc(n.texto)}</textarea></label>${rg('no', 'tam', 'Tamaño', 9, 40, 1, n.tam)}${cl('no', 'color', 'Color del texto', n.color)}${cl('no', 'fondo', 'Color del fondo', n.fondo)}${cl('no', 'borde', 'Color del borde', n.borde)}${rg('no', 'bw', 'Grosor del borde', 1, 8, 1, n.bw)}${ck('no', 'mayus', 'MAYÚSCULAS', n.mayus)}</div><div class="btns"><button class="btn" data-act="nota-ancla">${n.ancla ? 'Quitar la flecha' : 'Añadir flecha a un punto'}</button><button class="btn dng" data-act="quitar-sel">Quitar cuadro</button></div>${n.ancla ? '<p class="mut small">Arrastra el círculo del extremo de la flecha hasta el punto que quieres señalar.</p>' : ''}` : ''}
     ${items.length ? `<h3>En el plano</h3><div class="lista">${items.map(x => `<div class="fila${(x.k === 'marca' ? S.sel.marca : S.sel.nota) === x.id ? ' on' : ''}" data-act="sel-el" data-k="${x.k}" data-id="${x.id}">${x.ic ? `<img src="${x.ic}" width="26" height="26" alt="">` : '<i style="background:#1d5fb5"></i>'}<b>${esc(x.t)}</b></div>`).join('')}</div>` : ''}
     <h3>Leyenda</h3>${ck('le', 'on', 'Mostrar leyenda en el plano', L.on)}
-    ${L.on ? `<label class="txtl"><span>Posición</span><select class="txt" data-o="le" data-k="esq" data-ty="s">${[['ai', 'Arriba a la izquierda'], ['ad', 'Arriba a la derecha'], ['bi', 'Abajo a la izquierda'], ['bd', 'Abajo a la derecha']].map(([k, l]) => `<option value="${k}"${L.esq === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    ${L.on ? `<div class="card"><label class="txtl"><span>Posición</span><select class="txt" data-o="le" data-k="esq" data-ty="s">${[['ai', 'Arriba a la izquierda'], ['ad', 'Arriba a la derecha'], ['bi', 'Abajo a la izquierda'], ['bd', 'Abajo a la derecha']].map(([k, l]) => `<option value="${k}"${L.esq === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
       <div class="lbl">Qué aparece</div>${filasLeyenda(S.p).map(f => `<label class="ck"><input type="checkbox" data-lk="${esc(f.key)}" ${(L.ocultos || []).includes(f.key) ? '' : 'checked'}><span>${esc(f.txt)}</span></label>`).join('') || '<p class="mut small">Aún no hay nada que mostrar.</p>'}
-      ${rg('le', 'tam', 'Tamaño del texto', 10, 30, 1, L.tam)}${cl('le', 'borde', 'Color del borde', L.borde)}<p class="mut small">Se rellena sola con los trazos, el sentido de la marcha y las señales usadas; desmarca lo que no quieras. Se coloca dentro del marco de la pestaña Exportar.</p>` : ''}`;
+      ${rg('le', 'tam', 'Tamaño del texto', 10, 30, 1, L.tam)}${cl('le', 'borde', 'Color del borde', L.borde)}<p class="mut small">Se rellena sola con los trazos, el sentido de la marcha y las señales usadas; desmarca lo que no quieras. Se coloca dentro del marco de la pestaña Exportar.</p></div>` : ''}`;
 }
 function vistaExportar() {
-  const f = S.marco, gris = S.p.base === 'gris';
+  const f = S.marco, gris = S.p.base === 'gris', bib = leerBib(), enLista = !!S.p.libId && bib.some(x => x.id === S.p.libId);
   return `<h3>Imagen para redes</h3>
-    <div class="chips">${FORMATOS.map(([k, l]) => `<button data-act="fmt" data-f="${k}" class="${f.fmt === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div class="seg g2">${FORMATOS.map(([k, l]) => `<button data-act="fmt" data-f="${k}" class="${f.fmt === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     ${ck('mar', 'on', 'Mostrar el marco en el mapa', f.on)}
     <p class="mut small">Mueve y acerca el mapa para que lo que quieres quede dentro del marco. Se descargará solo esa zona.</p>
     <div class="btns"><button class="btn" data-act="encuadrar">Encuadrar el plano</button><button class="btn" data-act="copiar" ${gris ? '' : 'disabled'}>Copiar imagen</button></div>
     <button class="btn pri big" data-act="png" ${gris ? '' : 'disabled'}>Descargar PNG</button>
     ${gris ? '' : '<p class="mut small">Cambia a «Gris y blanco» en la pestaña Plano para descargar la imagen.</p>'}
-    <h3>Proyecto</h3><label class="txtl"><span>Nombre</span><input class="txt" value="${esc(S.p.nombre)}" data-o="p" data-k="nombre" data-ty="s"></label>
+    <h3>Mis planos</h3>
+    <div class="card"><button class="btn pri big" data-act="bib-guardar">${enLista ? 'Actualizar en «Mis planos»' : 'Guardar en «Mis planos»'}</button>
+      <p class="mut small">${enLista ? 'Este plano está en la lista y se actualiza solo con cada cambio, incluida la zona del mapa.' : 'Ponle un nombre claro arriba y guárdalo. Después se mantiene al día solo y podrás volver a él cuando quieras.'}</p></div>
+    ${bib.length ? `<div class="lista">${bib.map(e => `<div class="fila${e.id === S.p.libId ? ' on' : ''}" data-act="bib-abrir" data-id="${e.id}" title="Abrir este plano"><div class="pl"><b>${esc(e.nombre)}</b><small>${esc(fechaCorta(e.fecha))} · ${e.p.trazos.length} trazo${e.p.trazos.length === 1 ? '' : 's'}</small></div><button class="ico" data-act="bib-dup" data-id="${e.id}" title="Duplicar" aria-label="Duplicar">⧉</button><button class="ico dng" data-act="bib-borrar" data-id="${e.id}" title="Borrar" aria-label="Borrar">✕</button></div>`).join('')}</div>` : '<p class="vacio">Todavía no has guardado ningún plano.</p>'}
+    <h3>Archivo y plano nuevo</h3>
     <div class="btns"><button class="btn" data-act="guardar-arch">Guardar archivo</button><button class="btn" data-act="abrir-arch">Abrir archivo</button><button class="btn dng" data-act="nuevo-proy">Plano nuevo</button></div>
-    <p class="mut small">El trabajo se guarda solo en este navegador. El archivo sirve de copia o para llevarlo a otro equipo.</p>`;
+    <p class="mut small">El archivo (.json) sirve de copia de seguridad o para llevar el plano a otro equipo.</p>`;
 }
+const ICONOS_TAB = { plano: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>', trazos: '<path d="M4 19c5 0 3-7 8-7s3-7 8-7"/><circle cx="4" cy="19" r="1.5"/><circle cx="20" cy="5" r="1.5"/>', nombres: '<path d="M5 7V5h14v2M12 5v14M9 19h6"/>', senales: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.4"/>', exportar: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>' };
 const TABS = [['plano', 'Plano'], ['trazos', 'Trazos'], ['nombres', 'Nombres'], ['senales', 'Señales'], ['exportar', 'Exportar']];
 function render() {
-  $('#tabs').innerHTML = TABS.map(([k, l]) => `<button data-act="tab" data-t="${k}" class="${S.tab === k && !S.dib ? 'on' : ''}">${l}</button>`).join('');
+  $('#tabs').innerHTML = TABS.map(([k, l]) => `<button data-act="tab" data-t="${k}" class="${S.tab === k && !S.dib ? 'on' : ''}"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONOS_TAB[k]}</svg><span>${l}</span></button>`).join('');
   $('#tabs').hidden = !!S.dib;
   panel.innerHTML = S.dib ? vistaDibujo() : ({ plano: vistaPlano, trazos: vistaTrazos, nombres: vistaNombres, senales: vistaSenales, exportar: vistaExportar })[S.tab]();
   $('#nombre').value = S.p.nombre; actualizarMarco();
@@ -344,6 +379,10 @@ const alClic = ev => {
     case 'estilo-todos': { const l = S.sel.label && buscarEt(S.sel.label); if (t && l) { t.etiquetas.forEach(x => Object.assign(x, { tam: l.tam, color: l.color, halo: l.halo, negrita: l.negrita, mayus: l.mayus })); guardar(); redibujar(); aviso('Estilo aplicado a todos los nombres del trazo'); } break; }
     case 'fmt': { const [w, h] = b.dataset.f.split('x').map(Number); Object.assign(S.marco, { fmt: b.dataset.f, w, h }); render(); redibujar(); break; }
     case 'png': descargarPNG(); break;
+    case 'bib-guardar': guardarEnBib(); break;
+    case 'bib-abrir': abrirDeBib(b.dataset.id); break;
+    case 'bib-dup': duplicarBib(b.dataset.id); break;
+    case 'bib-borrar': if (b.dataset.ok) borrarDeBib(b.dataset.id); else { b.dataset.ok = '1'; b.textContent = '¿Seguro?'; setTimeout(() => { b.dataset.ok = ''; b.textContent = '✕'; }, 3000); } break;
     case 'guardar-arch': descargar(new Blob([JSON.stringify(S.p, null, 1)], { type: 'application/json' }), (S.p.nombre || 'plano') + '.json'); break;
     case 'abrir-arch': $('#fileProy').click(); break;
     case 'nuevo-proy': if (b.dataset.ok) { S.p = nuevoProyecto(); S.sel = { trazo: null, label: null }; guardar(); aplicarBase(); render(); redibujar(); } else { b.dataset.ok = '1'; b.textContent = 'Pulsa otra vez para borrar todo'; setTimeout(() => { b.dataset.ok = ''; b.textContent = 'Plano nuevo'; }, 3000); } break;
@@ -352,7 +391,7 @@ const alClic = ev => {
 panel.addEventListener('click', alClic); $('#tabs').addEventListener('click', alClic);
 $('#fileProy').addEventListener('change', async ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
-  try { const j = JSON.parse(await f.text()); if (!j || !Array.isArray(j.trazos)) throw new Error('No es un plano'); S.p = normalizar(j); S.sel = { trazo: null, label: null }; guardar(); aplicarBase(); render(); redibujar(); aviso('Plano abierto'); }
+  try { const j = JSON.parse(await f.text()); if (!j || !Array.isArray(j.trazos)) throw new Error('No es un plano'); delete j.libId; S.p = normalizar(j); S.sel = { trazo: null, label: null }; guardar(); aplicarBase(); render(); redibujar(); aviso('Plano abierto'); }
   catch (e) { aviso('No se pudo abrir el archivo: ' + e.message); }
 });
 function descargar(blob, nombre) { const a = document.createElement('a'), u = URL.createObjectURL(blob); a.href = u; a.download = nombre.replace(/[\\/:*?"<>|]+/g, '-'); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 3000); }
