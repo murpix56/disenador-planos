@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc } from './net.js?v=20261108h';
+import { net, merc } from './net.js?v=20261108i';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -30,7 +30,7 @@ function calles(ctx, v, p) {
 }
 
 /* Estilo «Beige»: fondo crema, manzanas en tono arena, calles blancas y vías principales amarillentas (fijo, sin teselas: también sale en la imagen descargada) */
-export const TIERRA = { fondo: '#f4f0e6', manzana: '#e9dac0', borde: '#d8c6a2', via: '#fbeeb8', viaBorde: '#dcc98a' };
+export const TIERRA = { fondo: '#f4f0e6', manzana: '#e9dac0', borde: '#d8c6a2', via: '#fbeeb8', viaBorde: '#dcc98a', verde: '#cfe4b3', verdeBorde: '#b4d391' };
 function callesTierra(ctx, v) {
   if (!net.ready) return;
   const k = v.k, halo = Math.min(100 / v.mpp, 900), mg = halo / 2 / v.S;
@@ -48,6 +48,15 @@ function callesTierra(ctx, v) {
   };
   const ancho = m => Math.min(70 * k, Math.max(1.3 * k, m / v.mpp)), cas = 2.6 * k;
   if (halo > 4 * k) pasada([7.5, 10, 13], halo, TIERRA.manzana);       /* las zonas con calles se tiñen de arena: manzanas */
+  if (net.verdes && net.verdes.length) {                                /* zonas verdes (parques, jardines, césped) */
+    ctx.fillStyle = TIERRA.verde; ctx.strokeStyle = TIERRA.verdeBorde; ctx.lineWidth = 1.4 * k;
+    const ox0 = v.cx - v.w / 2 / v.S, ox1 = v.cx + v.w / 2 / v.S, oy0 = v.cy - v.h / 2 / v.S, oy1 = v.cy + v.h / 2 / v.S;
+    for (const a of net.verdes) {
+      const b = a.b; if (b[2] < ox0 || b[0] > ox1 || b[3] < oy0 || b[1] > oy1) continue;
+      ctx.beginPath(); for (let i = 0; i < a.mx.length; i++) { const x = (a.mx[i] - v.cx) * v.S + v.w / 2, y = (a.my[i] - v.cy) * v.S + v.h / 2; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+  }
   for (const m of [4.5, 7.5, 10, 13]) pasada([m], ancho(m) + cas, m >= 10 ? TIERRA.viaBorde : TIERRA.borde);
   for (const m of [4.5, 7.5, 10, 13]) pasada([m], ancho(m), m >= 10 ? TIERRA.via : '#ffffff');
 }
@@ -138,9 +147,9 @@ function borrador(ctx, v, b) {
 }
 
 /* ───────── Señales ───────── */
-export const TRAFICO = { prohibido: 'Dirección prohibida', obras: 'Obras', peligro: 'Peligro', estacionar: 'Prohibido estacionar', salida: 'Salida / llegada', meta: 'Meta' };
+export const TRAFICO = { prohibido: 'Dirección prohibida', obras: 'Obras', peligro: 'Peligro', estacionar: 'Prohibido estacionar', salida: 'Salida / llegada', meta: 'Meta', obligatorio: 'Dirección obligatoria' };
 /* Puntos de referencia (dibujos): no salen en la leyenda */
-export const REFERENCIAS = { iglesia: 'Iglesia', edificio: 'Edificio', fuente: 'Fuente', futbol: 'Campo de fútbol', arcosalida: 'Arco de salida', arcometa: 'Arco de meta', aparcamiento: 'Aparcamiento', parque: 'Parque / árbol' };
+export const REFERENCIAS = { iglesia: 'Iglesia', edificio: 'Edificio', fuente: 'Fuente', futbol: 'Campo de fútbol', arco: 'Arco (sin texto)', arcosalida: 'Arco de salida', arcometa: 'Arco de meta', aparcamiento: 'Aparcamiento', parque: 'Parque / árbol' };
 export const SENALES = { ...TRAFICO, ...REFERENCIAS };
 const poli = (ctx, pts, fill, borde) => { ctx.beginPath(); pts.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.closePath(); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (borde) { ctx.strokeStyle = borde; ctx.stroke(); } };
 const rect = (ctx, x, y, w, h, fill, borde) => poli(ctx, [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], fill, borde);
@@ -172,13 +181,14 @@ function dibujarRef(ctx, tipo, s) {
     ctx.strokeStyle = O; ctx.lineWidth = 2; ctx.strokeRect(-44, -30, 88, 60);
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.4; ctx.strokeRect(-40, -26, 80, 52); ctx.strokeRect(-40, -13, 14, 26); ctx.strokeRect(26, -13, 14, 26);
     ctx.beginPath(); ctx.moveTo(0, -26); ctx.lineTo(0, 26); ctx.stroke(); disco(ctx, 0, 0, 9, null, '#ffffff');
-  } else if (tipo === 'arcosalida' || tipo === 'arcometa') {
-    const meta = tipo === 'arcometa', col = meta ? '#101828' : '#16a34a';
+  } else if (tipo === 'arco' || tipo === 'arcosalida' || tipo === 'arcometa') {
+    const meta = tipo === 'arcometa', liso = tipo === 'arco', col = meta ? '#101828' : liso ? '#1d5fb5' : '#16a34a';
     ctx.translate(0, -5);
     rect(ctx, -44, -4, 12, 44, '#e5e7eb', O); rect(ctx, 32, -4, 12, 44, '#e5e7eb', O); rect(ctx, -44, 22, 12, 6, col); rect(ctx, 32, 22, 12, 6, col);
     rect(ctx, -48, -36, 96, 32, col, O);
     if (meta) for (let i = 0; i < 12; i++) { rect(ctx, -48 + i * 8, -36, 8, 5, i % 2 ? '#ffffff' : '#101828'); rect(ctx, -48 + i * 8, -9, 8, 5, i % 2 ? '#101828' : '#ffffff'); }
-    ctx.fillStyle = '#ffffff'; ctx.font = `800 19px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(meta ? 'META' : 'SALIDA', 0, -20);
+    if (liso) { rect(ctx, -48, -22, 96, 5, '#ffffff'); }
+    else { ctx.fillStyle = '#ffffff'; ctx.font = `800 19px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(meta ? 'META' : 'SALIDA', 0, -20); }
     rect(ctx, -50, 40, 100, 4, SUELO);
   } else if (tipo === 'aparcamiento') {
     rr(ctx, -38, -38, 76, 76, 12); ctx.fillStyle = '#1d5fb5'; ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = '#ffffff'; ctx.stroke();
@@ -203,6 +213,10 @@ export function dibujarSenal(ctx, tipo, x, y, s, k = 1, rot = 0) {
   if (tipo === 'prohibido') {
     ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); sombra(ctx, k); ctx.fillStyle = '#d92d20'; ctx.fill(); sinSombra(ctx);
     ctx.lineWidth = s * 0.08; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.fillRect(-r * 0.64, -s * 0.085, r * 1.28, s * 0.17);
+  } else if (tipo === 'obligatorio') {
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); sombra(ctx, k); ctx.fillStyle = '#1d5fb5'; ctx.fill(); sinSombra(ctx);
+    ctx.lineWidth = s * 0.05; ctx.strokeStyle = '#fff'; ctx.stroke();
+    ctx.beginPath(); [[-0.07, 0.3], [0.07, 0.3], [0.07, 0.02], [0.2, 0.02], [0, -0.3], [-0.2, 0.02], [-0.07, 0.02]].forEach((q, i) => (i ? ctx.lineTo(q[0] * s, q[1] * s) : ctx.moveTo(q[0] * s, q[1] * s))); ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill();
   } else if (tipo === 'estacionar') {
     ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); sombra(ctx, k); ctx.fillStyle = '#1d5fb5'; ctx.fill(); sinSombra(ctx);
     ctx.lineWidth = s * 0.14; ctx.strokeStyle = '#d92d20'; ctx.beginPath(); ctx.arc(0, 0, r - s * 0.07, 0, 7); ctx.stroke();

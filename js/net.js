@@ -1,5 +1,5 @@
 /* Callejero (OpenStreetMap vía Overpass), grafo, ajuste a calle, rutas y localización de tramos por nombre */
-import { lsGet, lsSet, normName, lengthM } from './util.js?v=20261108h';
+import { lsGet, lsSet, normName, lengthM } from './util.js?v=20261108i';
 
 export const CFG = {
   center: [38.9565, -5.8612], zoom: 15,
@@ -70,6 +70,49 @@ async function fetchOverpass() {
     } catch (err) { lastErr = err; }
   }
   throw lastErr;
+}
+
+/* Zonas verdes (parques, jardines, césped, arbolado) para el fondo Beige: descarga aparte y caché propia */
+const VERDES_KEY = 'plano.verdes.v1';
+net.verdes = null;
+export function buildVerdes(areas) {
+  net.verdes = areas.map(g => {
+    const k = g.length / 2, mx = new Float64Array(k), my = new Float64Array(k); let x0 = 9, y0 = 9, x1 = -9, y1 = -9;
+    for (let i = 0; i < k; i++) { const m = merc(g[2 * i], g[2 * i + 1]); mx[i] = m[0]; my[i] = m[1]; if (m[0] < x0) x0 = m[0]; if (m[0] > x1) x1 = m[0]; if (m[1] < y0) y0 = m[1]; if (m[1] > y1) y1 = m[1]; }
+    return { mx, my, b: [x0, y0, x1, y1] };
+  });
+}
+async function fetchVerdes() {
+  const [s, w, n, e] = CFG.bbox, bb = `(${s},${w},${n},${e})`;
+  const q = `[out:json][timeout:60];(way["leisure"~"^(park|garden|playground|recreation_ground|nature_reserve|common)$"]${bb};way["landuse"~"^(grass|forest|meadow|recreation_ground|village_green)$"]${bb};way["natural"~"^(wood|scrub|grassland)$"]${bb};);out geom;`;
+  const ok = t => !!t && (/^(park|garden|playground|recreation_ground|nature_reserve|common)$/.test(t.leisure || '') || /^(grass|forest|meadow|recreation_ground|village_green)$/.test(t.landuse || '') || /^(wood|scrub|grassland)$/.test(t.natural || ''));
+  let lastErr;
+  for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
+    try {
+      const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 50000);
+      const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ctl.signal });
+      clearTimeout(to); if (!r.ok) throw new Error('HTTP ' + r.status);
+      const j = await r.json(), areas = [];
+      for (const el of j.elements || []) {
+        if (el.type !== 'way' || !el.geometry || el.geometry.length < 4 || !ok(el.tags)) continue;
+        const g = []; for (const p of el.geometry) g.push(+p.lat.toFixed(6), +p.lon.toFixed(6)); areas.push(g);
+      }
+      return areas;
+    } catch (err) { lastErr = err; }
+  }
+  throw lastErr;
+}
+let loadingV = null;
+export function loadVerdes(force) {
+  if (net.verdes && !force) return Promise.resolve(true);
+  if (loadingV && !force) return loadingV;
+  loadingV = (async () => {
+    if (!force) { try { const c = JSON.parse(lsGet(VERDES_KEY, 'null')); if (c && Array.isArray(c.areas)) { buildVerdes(c.areas); return true; } } catch { /* caché corrupta */ } }
+    try { const areas = await fetchVerdes(); buildVerdes(areas); lsSet(VERDES_KEY, JSON.stringify({ t: Date.now(), areas })); return true; }
+    catch (err) { console.warn(err); return false; }
+    finally { loadingV = null; }
+  })();
+  return loadingV;
 }
 
 let loading = null;

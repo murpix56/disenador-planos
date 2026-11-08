@@ -8,7 +8,7 @@ Herramienta **personal** (de un subinspector de la Policía Local de Don Benito)
 - Referencia visual: sus carteles reales: fondo **gris claro (#e6e6e6)** y calles **blancas** sin más detalle; itinerario en **verde** con **flechas azules** de sentido; cortes en **rojo** con señales de dirección prohibida en los extremos; nombres de calle en **azul (#1d5fb5), negrita, mayúsculas y borde blanco**; cuadros de texto blancos con borde azul y flecha («ZONA DE SALIDA Y LLEGADA»); leyenda en caja blanca con borde rojo («Itinerario», «Sentido de la marcha»).
 
 ## Qué hace (estado actual)
-- Fondos (desplegable): **Gris y blanco** (calles dibujadas con el callejero OSM, anchura según tipo de vía; colores configurables), **Beige / tonos tierra** (fijo, dibujado en el lienzo con el mismo callejero: fondo crema, «manzanas» en arena = trazo ancho bajo las calles, calles blancas y vías principales amarillentas; se exporta a PNG; sin polígonos de edificios), **Calles** (OSM) y **Satélite** (PNOA/IGN). Exportar PNG: gris y beige.
+- Fondos (desplegable): **Gris y blanco** (calles dibujadas con el callejero OSM, anchura según tipo de vía; colores configurables), **Beige / tonos tierra** (fijo, dibujado en el lienzo con el mismo callejero: fondo crema, «manzanas» en arena = trazo ancho bajo las calles, calles blancas y vías principales amarillentas; se exporta a PNG; zonas verdes (parques, jardines, césped, arbolado: `loadVerdes` en net.js, descarga aparte, caché `plano.verdes.v1`, solo `way` cerrados, sin relaciones multipolígono); sin polígonos de edificios ni agua), **Calles** (OSM) y **Satélite** (PNOA/IGN). Exportar PNG: gris y beige.
 - **Trazo que sigue las calles**: puntos de inicio, final e intermedios → ruta por el grafo (Dijkstra). «Libre» y «Levantar el lápiz» (varios tramos). Se quitan rebotes si se marca pasado el cruce.
 - **Estilos rápidos** al dibujar: Itinerario (verde, flechas, punto de salida y meta), Corte (rojo, señal de dirección prohibida en los dos extremos), Desvío (discontinuo, flechas). Cambiables luego.
 - Personalización del trazo: color (paleta + libre), grosor, borde blanco, discontinuo, flechas (color, tamaño, separación; **esquivan los nombres**).
@@ -18,7 +18,8 @@ Herramienta **personal** (de un subinspector de la Policía Local de Don Benito)
 - **Exportar** PNG (1080×1080, 1080×1350, 1200×630, 2160×2160) de la zona dentro de un **marco** sobre el mapa; «Encuadrar el plano»; «Copiar imagen». **Solo con el fondo gris** (con teselas se usa captura de pantalla).
 - Flechas: solo se colocan donde el trazo es casi recto (no en glorietas ni curvas cerradas, a cualquier zoom, `flechas()` en render.js) y se pueden quitar de una **zona** (`flechas.sin`: círculos en metros anclados al mapa). Posición y número dependen del zoom porque separación y tamaño son en píxeles.
 - Flechas de **doble sentido** (`flechas.doble`: flecha con dos puntas; la leyenda pone «Doble sentido»).
-- **Puntos de referencia** (dibujos, `dibujarRef` en render.js; no salen en la leyenda): iglesia, edificio, fuente, campo de fútbol, arco de salida y de meta, aparcamiento, parque/árbol.
+- **Puntos de referencia** (dibujos, `dibujarRef` en render.js; no salen en la leyenda): iglesia, edificio, fuente, campo de fútbol, arco liso (sin texto), arco de salida y de meta, aparcamiento, parque/árbol.
+- Señal de «dirección obligatoria» (flecha blanca en círculo azul; se orienta con el giro).
 - Señales con giro (`marca.rot`, deslizador y botones de 90°).
 - **Mis planos**: lista de planos guardados en el navegador (`plano.biblioteca.v1`, con la vista del mapa); un plano guardado se actualiza solo. Más archivo `.json`.
 - Interfaz: pestañas con icono, tarjetas, interruptores y desplegables con el mismo estilo.

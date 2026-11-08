@@ -1,8 +1,8 @@
 /* Diseñador de planos · Policía Local de Don Benito (uso personal)
  * Plano gris y blanco (o calles / satélite), recorrido que sigue las calles, color, flechas y nombres a medida, y descarga en PNG. */
-import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108h';
-import { net, CFG, loadNet, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108h';
-import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108h';
+import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108i';
+import { net, CFG, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108i';
+import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108i';
 
 /* ───────── Proyecto ───────── */
 const PROY_KEY = 'plano.proyecto.v1';
@@ -90,6 +90,7 @@ new ResizeObserver(() => { map.invalidateSize(); redibujar(); }).observe(cont);
 function aplicarBase() {
   Object.values(bases).forEach(b => { if (map.hasLayer(b)) map.removeLayer(b); });
   if (bases[S.p.base]) bases[S.p.base].addTo(map);
+  if (S.p.base === 'tierra' && !net.verdes) loadVerdes().then(ok => { if (!ok && !net.verdes) aviso('No se pudieron descargar las zonas verdes. Se reintentará al elegir de nuevo el fondo Beige.'); else redibujar(); });
   cont.style.background = S.p.base === 'gris' ? S.p.gris.fondo : S.p.base === 'tierra' ? TIERRA.fondo : '#dfe5ea'; redibujar();
 }
 
@@ -238,7 +239,7 @@ function vistaPlano() {
   const g = S.p.gris, B = [['gris', 'Gris y blanco (personalizable)'], ['tierra', 'Beige (tonos tierra)'], ['osm', 'Calles (OpenStreetMap)'], ['sat', 'Satélite (PNOA)']];
   return `<h3>Fondo del plano</h3>
     <select class="txt" data-base="1" aria-label="Fondo del plano">${B.map(([k, l]) => `<option value="${k}"${S.p.base === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
-    ${S.p.base === 'gris' ? `<div class="card grp">${cl('g', 'fondo', 'Color del fondo', g.fondo)}${cl('g', 'calle', 'Color de las calles', g.calle)}${rg('g', 'ancho', 'Grosor de las calles', 0.5, 2, 0.05, g.ancho)}<button class="btn" data-act="gris-def">Restablecer colores</button></div>` : `<p class="mut small">${S.p.base === 'tierra' ? 'Estilo fijo (fondo crema, manzanas en arena, calles blancas y vías principales amarillentas). También sale en la imagen descargada.' : 'La descarga de imagen solo está disponible con los fondos «Gris y blanco» y «Beige». Con calles o satélite, usa la captura de pantalla.'}</p>`}
+    ${S.p.base === 'gris' ? `<div class="card grp">${cl('g', 'fondo', 'Color del fondo', g.fondo)}${cl('g', 'calle', 'Color de las calles', g.calle)}${rg('g', 'ancho', 'Grosor de las calles', 0.5, 2, 0.05, g.ancho)}<button class="btn" data-act="gris-def">Restablecer colores</button></div>` : `<p class="mut small">${S.p.base === 'tierra' ? 'Estilo fijo (fondo crema, manzanas en arena, calles blancas, vías principales amarillentas y zonas verdes de OpenStreetMap: parques, jardines y césped). También sale en la imagen descargada.' : 'La descarga de imagen solo está disponible con los fondos «Gris y blanco» y «Beige». Con calles o satélite, usa la captura de pantalla.'}</p>`}
     <h3>Callejero de Don Benito</h3><p class="mut small">${esc(S.netTxt)}</p><button class="btn" data-act="red-calles">Descargar de nuevo</button>
     <h3>Ir a una calle</h3><input id="irCalle" class="txt" list="listaCalles" placeholder="Escribe el nombre de la calle…" autocomplete="off"><datalist id="listaCalles"></datalist>`;
 }
@@ -357,7 +358,7 @@ const alClic = ev => {
     case 'tab': S.tab = b.dataset.t; render(); redibujar(); break;
     case 'base': S.p.base = b.dataset.b; aplicarBase(); guardar(); render(); break;
     case 'gris-def': S.p.gris = nuevoProyecto().gris; aplicarBase(); guardar(); render(); break;
-    case 'red-calles': loadNet(true, estadoCalles).then(() => { render(); redibujar(); }); break;
+    case 'red-calles': loadNet(true, estadoCalles).then(() => { render(); redibujar(); }); if (S.p.base === 'tierra') loadVerdes(true).then(() => redibujar()); break;
     case 'nuevo': S.dib = nuevoBorrador(); S.sel = { trazo: S.sel.trazo, label: null }; render(); redibujar(); if (!net.ready) aviso('El callejero no está cargado: trazado libre'); break;
     case 'rehacer': if (t) { S.dib = nuevoBorrador(); S.dib.rehacer = t.id; render(); redibujar(); } break;
     case 'selt': S.sel = { trazo: b.dataset.id, label: null }; render(); redibujar(); { const x = S.p.trazos.find(q => q.id === b.dataset.id); if (x && x.segs.length) map.fitBounds(L.latLngBounds(x.segs.flat()), { padding: [60, 60], maxZoom: 18 }); } break;
