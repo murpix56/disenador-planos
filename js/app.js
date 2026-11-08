@@ -1,8 +1,8 @@
 /* Diseñador de planos · Policía Local de Don Benito (uso personal)
  * Plano gris y blanco (o calles / satélite), recorrido que sigue las calles, color, flechas y nombres a medida, y descarga en PNG. */
-import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108j';
-import { net, CFG, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108j';
-import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108j';
+import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108k';
+import { net, CFG, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108k';
+import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108k';
 
 /* ───────── Proyecto ───────── */
 const PROY_KEY = 'plano.proyecto.v1';
@@ -235,10 +235,19 @@ const cl = (o, k, label, val, id = '') => `<label class="cl"><span>${label}</spa
 const ck = (o, k, label, val, id = '') => `<label class="ck"><input type="checkbox" ${val ? 'checked' : ''} data-o="${o}" data-k="${k}" data-ty="b"${id ? ` data-id="${id}"` : ''}><span>${label}</span></label>`;
 const swatches = (o, k, val) => `<div class="sws">${PALETA.map(c => `<button type="button" class="sw${val === c ? ' on' : ''}" style="background:${c}" data-act="color" data-o="${o}" data-k="${k}" data-v="${c}" aria-label="Color ${c}"></button>`).join('')}</div>`;
 
+/* Cuadrito de muestra del fondo elegido (miniatura con calles, manzana y zona verde) */
+function estiloMuestra() {
+  const g = S.p.gris, linea = c => `linear-gradient(${c},${c})`, cruz = c => `${linea(c)} 50% 50%/100% 5px no-repeat,${linea(c)} 50% 50%/5px 100% no-repeat`;
+  const b = S.p.base;
+  if (b === 'tierra') return `background:${cruz('#ffffff')},${linea('#cfe4b3')} 5px 5px/14px 14px no-repeat,${linea(TIERRA.manzana)}`;
+  if (b === 'osm') return `background:${linea('#f7d8a0')} 0 62%/100% 4px no-repeat,${cruz('#ffffff')},${linea('#f2efe9')}`;
+  if (b === 'sat') return 'background:linear-gradient(135deg,#6c7a52,#4b5a3e 55%,#8a8468)';
+  return `background:${cruz(g.calle)},${linea(g.fondo)}`;
+}
 function vistaPlano() {
   const g = S.p.gris, B = [['gris', 'Gris y blanco (personalizable)'], ['tierra', 'Beige (tonos tierra)'], ['osm', 'Calles (OpenStreetMap)'], ['sat', 'Satélite (PNOA)']];
   return `<h3>Fondo del plano</h3>
-    <select class="txt" data-base="1" aria-label="Fondo del plano">${B.map(([k, l]) => `<option value="${k}"${S.p.base === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
+    <div class="selmuestra"><select class="txt" data-base="1" aria-label="Fondo del plano">${B.map(([k, l]) => `<option value="${k}"${S.p.base === k ? ' selected' : ''}>${l}</option>`).join('')}</select><span id="muestraBase" class="muestra" style="${estiloMuestra()}" title="Muestra del fondo elegido"></span></div>
     ${S.p.base === 'gris' ? `<div class="card grp">${cl('g', 'fondo', 'Color del fondo', g.fondo)}${cl('g', 'calle', 'Color de las calles', g.calle)}${rg('g', 'ancho', 'Grosor de las calles', 0.5, 2, 0.05, g.ancho)}<button class="btn" data-act="gris-def">Restablecer colores</button></div>` : `<p class="mut small">${S.p.base === 'tierra' ? 'Estilo fijo (fondo crema, manzanas en arena, calles blancas, vías principales amarillentas y zonas verdes de OpenStreetMap: parques, jardines y césped). También sale en la imagen descargada.' : 'La descarga de imagen solo está disponible con los fondos «Gris y blanco» y «Beige». Con calles o satélite, usa la captura de pantalla.'}</p>`}
     <h3>Callejero de Don Benito</h3><p class="mut small">${esc(S.netTxt)}</p><button class="btn" data-act="red-calles">Descargar de nuevo</button>
     <h3>Ir a una calle</h3><input id="irCalle" class="txt" list="listaCalles" placeholder="Escribe el nombre de la calle…" autocomplete="off"><datalist id="listaCalles"></datalist>`;
@@ -344,7 +353,7 @@ panel.addEventListener('input', ev => {
   const v = e.type === 'checkbox' ? e.checked : (e.dataset.ty === 'n' ? +e.value : e.value);
   fijar(obj, e.dataset.k, v);
   if (e.type === 'range') { const o = e.parentElement.querySelector('output'); if (o) o.textContent = v; }
-  if (e.dataset.o === 'g') { cont.style.background = S.p.base === 'gris' ? S.p.gris.fondo : ''; }
+  if (e.dataset.o === 'g') { cont.style.background = S.p.base === 'gris' ? S.p.gris.fondo : ''; const mb = document.getElementById('muestraBase'); if (mb) mb.setAttribute('style', estiloMuestra()); }
   if (e.dataset.o === 'p' && e.dataset.k === 'nombre') $('#nombre').value = v;
   guardar(); redibujar();
   if (e.type === 'checkbox' && ['fl', 'mar', 'le'].includes(e.dataset.o)) { if (e.dataset.o === 'mar') actualizarMarco(); render(); }

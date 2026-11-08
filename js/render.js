@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc, manzanas } from './net.js?v=20261108j';
+import { net, merc, manzanas } from './net.js?v=20261108k';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -30,7 +30,7 @@ function calles(ctx, v, p) {
 }
 
 /* Estilo «Beige»: fondo crema, manzanas en tono arena, calles blancas y vías principales amarillentas (fijo, sin teselas: también sale en la imagen descargada) */
-export const TIERRA = { fondo: '#f4f0e6', manzana: '#e9dac0', borde: '#d8c6a2', via: '#fbeeb8', viaBorde: '#dcc98a', verde: '#cfe4b3', verdeBorde: '#b4d391' };
+export const TIERRA = { fondo: '#f4f0e6', manzana: '#e9dac0', borde: '#d8c6a2', via: '#ffffff', viaBorde: '#d8c6a2', verde: '#cfe4b3', verdeBorde: '#b4d391' };
 function callesTierra(ctx, v) {
   if (!net.ready) return;
   const k = v.k, halo = Math.min(100 / v.mpp, 900), mg = halo / 2 / v.S;
@@ -156,7 +156,7 @@ function borrador(ctx, v, b) {
 }
 
 /* ───────── Señales ───────── */
-export const TRAFICO = { prohibido: 'Dirección prohibida', obras: 'Obras', peligro: 'Peligro', estacionar: 'Prohibido estacionar', salida: 'Salida / llegada', meta: 'Meta', obligatorio: 'Dirección obligatoria' };
+export const TRAFICO = { prohibido: 'Dirección prohibida', obras: 'Obras', peligro: 'Peligro', estacionar: 'Prohibido estacionar', salida: 'Salida / llegada', meta: 'Meta', obligatorio: 'Dirección obligatoria', minusvalido: 'Plaza movilidad reducida' };
 /* Puntos de referencia (dibujos): no salen en la leyenda */
 export const REFERENCIAS = { iglesia: 'Iglesia', edificio: 'Edificio', fuente: 'Fuente', futbol: 'Campo de fútbol', arco: 'Arco (sin texto)', arcosalida: 'Arco de salida', arcometa: 'Arco de meta', aparcamiento: 'Aparcamiento', parque: 'Parque / árbol' };
 export const SENALES = { ...TRAFICO, ...REFERENCIAS };
@@ -226,6 +226,13 @@ export function dibujarSenal(ctx, tipo, x, y, s, k = 1, rot = 0) {
     ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); sombra(ctx, k); ctx.fillStyle = '#1d5fb5'; ctx.fill(); sinSombra(ctx);
     ctx.lineWidth = s * 0.05; ctx.strokeStyle = '#fff'; ctx.stroke();
     ctx.beginPath(); [[-0.07, 0.3], [0.07, 0.3], [0.07, 0.02], [0.2, 0.02], [0, -0.3], [-0.2, 0.02], [-0.07, 0.02]].forEach((q, i) => (i ? ctx.lineTo(q[0] * s, q[1] * s) : ctx.moveTo(q[0] * s, q[1] * s))); ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill();
+  } else if (tipo === 'minusvalido') {
+    const u = s / 100; rr(ctx, -r, -r, s, s, s * 0.12); sombra(ctx, k); ctx.fillStyle = '#1d5fb5'; ctx.fill(); sinSombra(ctx); ctx.lineWidth = s * 0.045; ctx.strokeStyle = '#fff'; ctx.stroke();
+    ctx.save(); ctx.scale(u, u); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#fff'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.arc(-6, -27, 6.5, 0, 7); ctx.fill();
+    ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(-6, -15); ctx.lineTo(-6, 4); ctx.lineTo(14, 4); ctx.lineTo(23, 24); ctx.stroke();
+    ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(-6, -9); ctx.lineTo(12, -9); ctx.stroke();
+    ctx.lineWidth = 6.5; ctx.beginPath(); ctx.arc(-8, 13, 19, 0.15 * Math.PI, 1.55 * Math.PI); ctx.stroke(); ctx.restore();
   } else if (tipo === 'estacionar') {
     ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); sombra(ctx, k); ctx.fillStyle = '#1d5fb5'; ctx.fill(); sinSombra(ctx);
     ctx.lineWidth = s * 0.14; ctx.strokeStyle = '#d92d20'; ctx.beginPath(); ctx.arc(0, 0, r - s * 0.07, 0, 7); ctx.stroke();

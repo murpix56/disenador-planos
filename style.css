@@ -106,3 +106,6 @@ select.txt{appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:
 .pl{flex:1;min-width:0} .pl b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .pl small{color:var(--mut);font-size:12px}
 .ico.dng:hover{color:var(--red)}
 h3{display:flex;align-items:center;gap:8px} h3::after{content:"";flex:1;height:1px;background:var(--line)}
+
+.selmuestra{display:flex;align-items:center;gap:10px;margin:4px 0 10px} .selmuestra .txt{flex:1;min-width:0}
+.muestra{flex:none;width:44px;height:44px;border-radius:11px;border:1px solid #cfd4dc;box-shadow:0 1px 3px rgba(16,24,40,.12)}
