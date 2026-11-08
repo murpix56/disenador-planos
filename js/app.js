@@ -1,14 +1,14 @@
 /* Diseñador de planos · Policía Local de Don Benito (uso personal)
  * Plano gris y blanco (o calles / satélite), recorrido que sigue las calles, color, flechas y nombres a medida, y descarga en PNG. */
-import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108b';
-import { net, CFG, loadNet, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108b';
-import { dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, ESTILO_CARTEL } from './render.js?v=20261108b';
+import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108c';
+import { net, CFG, loadNet, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108c';
+import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, ESTILO_CARTEL } from './render.js?v=20261108c';
 
 /* ───────── Proyecto ───────── */
 const PROY_KEY = 'plano.proyecto.v1';
 const PALETA = ['#16a34a', '#d92d20', '#f79009', '#1d5fb5', '#7a5af8', '#101828'];
 const FORMATOS = [['1080x1080', 'Cuadrado 1080×1080'], ['1080x1350', 'Vertical 1080×1350'], ['1200x630', 'Horizontal 1200×630'], ['2160x2160', 'Cuadrado HD 2160×2160']];
-const LEY_DEF = { on: false, esq: 'bi', tam: 15, borde: '#d92d20', fondo: '#ffffff', color: '#101828' };
+const LEY_DEF = { on: false, esq: 'bi', ocultos: ['s:salida', 's:meta'], tam: 15, borde: '#d92d20', fondo: '#ffffff', color: '#101828' };
 const nuevoProyecto = () => ({ nombre: 'Plano sin título', base: 'gris', gris: { fondo: '#e6e6e6', calle: '#ffffff', ancho: 1 }, trazos: [], marcas: [], notas: [], leyenda: { ...LEY_DEF } });
 const nuevaMarca = (tipo, lat, lon) => ({ id: uid(), tipo, lat, lon, tam: 40, texto: '', ttam: 13, color: '#1d5fb5', halo: '#ffffff', mayus: true });
 const nuevaNota = (lat, lon) => ({ id: uid(), texto: 'TEXTO', lat, lon, ancla: null, tam: 16, color: '#1d5fb5', fondo: '#ffffff', borde: '#1d5fb5', bw: 3, mayus: true });
@@ -93,7 +93,8 @@ function puntoMedio(pts) {
   for (let i = 1; i < pts.length; i++) { const dd = lengthM([pts[i - 1], pts[i]]); if (acum + dd >= tot / 2) { const u = dd ? (tot / 2 - acum) / dd : 0; return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * u, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * u]; } acum += dd; }
   return pts[0];
 }
-const textoCalle = n => (S.abreviar ? n.replace(/^Calle\s+/i, 'C/ ').replace(/^Avenida\s+/i, 'Avda. ').replace(/^Carretera\s+/i, 'Ctra. ') : n);
+const ABREV = [[/^Calle\s+/i, 'C/ '], [/^Avenida\s+/i, 'Avda. '], [/^Carretera\s+/i, 'Ctra. '], [/^Plaza\s+/i, 'Pza. '], [/^Paseo\s+/i, 'Pº '], [/^Traves[ií]a\s+/i, 'Trv. '], [/^Camino\s+/i, 'Cno. '], [/^Callej[oó]n\s+/i, 'Cjón. '], [/^Glorieta\s+/i, 'Gta. ']];
+const textoCalle = n => (S.abreviar ? ABREV.reduce((s, [re, ab]) => s.replace(re, ab), n) : n);
 function etiquetasDe(tramos) {
   const mejor = new Map();
   for (const t of tramos) { if (!t.name) continue; const L = lengthM(t.pts), b = mejor.get(t.name); if (!b || L > b.L) mejor.set(t.name, { t, L }); }
@@ -246,7 +247,7 @@ function vistaNombres() {
       ${rg('lab', 'giro', 'Giro (°)', -90, 90, 1, l.giro, l.id)}
       <div class="dos">${ck('lab', 'negrita', 'Negrita', l.negrita, l.id)}${ck('lab', 'mayus', 'MAYÚSCULAS', l.mayus, l.id)}</div>
       <div class="btns"><button class="btn" data-act="estilo-todos">Usar en todos</button><button class="btn dng" data-act="quitar-et" data-id="${l.id}">Quitar</button></div>` : ''}
-    <label class="ck sep"><input type="checkbox" id="abrev" ${S.abreviar ? 'checked' : ''}><span>Abreviar al crear (C/, Avda.)</span></label>
+    <label class="ck sep"><input type="checkbox" id="abrev" ${S.abreviar ? 'checked' : ''}><span>Abreviar al crear (C/, Avda., Pza., Pº, Trv., Cno.)</span></label>
     <p class="mut small">Arrastra un nombre en el mapa para moverlo. El giro se suma a la dirección de la calle.</p>`;
 }
 const iconos = {};
@@ -261,7 +262,9 @@ function vistaSenales() {
     ${n ? `<h3>Cuadro seleccionado</h3><label class="txtl"><span>Texto (una línea por renglón)</span><textarea class="txt" rows="3" data-o="no" data-k="texto" data-ty="s">${esc(n.texto)}</textarea></label>${rg('no', 'tam', 'Tamaño', 9, 40, 1, n.tam)}${cl('no', 'color', 'Color del texto', n.color)}${cl('no', 'fondo', 'Color del fondo', n.fondo)}${cl('no', 'borde', 'Color del borde', n.borde)}${rg('no', 'bw', 'Grosor del borde', 1, 8, 1, n.bw)}${ck('no', 'mayus', 'MAYÚSCULAS', n.mayus)}<div class="btns"><button class="btn" data-act="nota-ancla">${n.ancla ? 'Quitar la flecha' : 'Añadir flecha a un punto'}</button><button class="btn dng" data-act="quitar-sel">Quitar cuadro</button></div>${n.ancla ? '<p class="mut small">Arrastra el círculo del extremo de la flecha hasta el punto que quieres señalar.</p>' : ''}` : ''}
     ${items.length ? `<h3>En el plano</h3><div class="lista">${items.map(x => `<div class="fila${(x.k === 'marca' ? S.sel.marca : S.sel.nota) === x.id ? ' on' : ''}" data-act="sel-el" data-k="${x.k}" data-id="${x.id}">${x.ic ? `<img src="${x.ic}" width="26" height="26" alt="">` : '<i style="background:#1d5fb5"></i>'}<b>${esc(x.t)}</b></div>`).join('')}</div>` : ''}
     <h3>Leyenda</h3>${ck('le', 'on', 'Mostrar leyenda en el plano', L.on)}
-    ${L.on ? `<div class="lbl">Posición</div><div class="chips">${[['ai', 'Arriba izq.'], ['ad', 'Arriba der.'], ['bi', 'Abajo izq.'], ['bd', 'Abajo der.']].map(([k, l]) => `<button data-act="esq" data-e="${k}" class="${L.esq === k ? 'on' : ''}">${l}</button>`).join('')}</div>${rg('le', 'tam', 'Tamaño del texto', 10, 30, 1, L.tam)}${cl('le', 'borde', 'Color del borde', L.borde)}<p class="mut small">Se rellena sola con los nombres de los trazos, el sentido de la marcha y las señales usadas. Se coloca dentro del marco de la pestaña Exportar.</p>` : ''}`;
+    ${L.on ? `<label class="txtl"><span>Posición</span><select class="txt" data-o="le" data-k="esq" data-ty="s">${[['ai', 'Arriba a la izquierda'], ['ad', 'Arriba a la derecha'], ['bi', 'Abajo a la izquierda'], ['bd', 'Abajo a la derecha']].map(([k, l]) => `<option value="${k}"${L.esq === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <div class="lbl">Qué aparece</div>${filasLeyenda(S.p).map(f => `<label class="ck"><input type="checkbox" data-lk="${esc(f.key)}" ${(L.ocultos || []).includes(f.key) ? '' : 'checked'}><span>${esc(f.txt)}</span></label>`).join('') || '<p class="mut small">Aún no hay nada que mostrar.</p>'}
+      ${rg('le', 'tam', 'Tamaño del texto', 10, 30, 1, L.tam)}${cl('le', 'borde', 'Color del borde', L.borde)}<p class="mut small">Se rellena sola con los trazos, el sentido de la marcha y las señales usadas; desmarca lo que no quieras. Se coloca dentro del marco de la pestaña Exportar.</p>` : ''}`;
 }
 function vistaExportar() {
   const f = S.marco, gris = S.p.base === 'gris';
@@ -291,6 +294,7 @@ panel.addEventListener('input', ev => {
   const e = ev.target;
   if (e.id === 'irCalle') { $('#listaCalles').innerHTML = searchStreets(e.value).map(n => `<option value="${esc(n)}">`).join(''); const b = streetBounds(e.value); if (b) map.fitBounds(b, { padding: [40, 40], maxZoom: 18 }); return; }
   if (e.id === 'abrev') { S.abreviar = e.checked; return; }
+  if (e.dataset.lk) { const L = S.p.leyenda, oc = (L.ocultos || []).filter(x => x !== e.dataset.lk); if (!e.checked) oc.push(e.dataset.lk); L.ocultos = oc; guardar(); redibujar(); return; }
   if (!e.dataset.o) return;
   const obj = ruta(e.dataset.o, e.dataset.id); if (!obj) return;
   const v = e.type === 'checkbox' ? e.checked : (e.dataset.ty === 'n' ? +e.value : e.value);

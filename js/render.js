@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc } from './net.js?v=20261108b';
+import { net, merc } from './net.js?v=20261108c';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -126,13 +126,19 @@ export function dibujarSenal(ctx, tipo, x, y, s, k = 1) {
     ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-s * 0.05, -s * 0.2, s * 0.1, s * 0.34, s * 0.04) : ctx.rect(-s * 0.05, -s * 0.2, s * 0.1, s * 0.34); ctx.fill();
     ctx.beginPath(); ctx.arc(0, s * 0.26, s * 0.06, 0, 7); ctx.fill();
   } else if (tipo === 'obras') {
-    triangulo(ctx, s, k); ctx.fillStyle = '#101828'; ctx.strokeStyle = '#101828'; ctx.lineWidth = s * 0.075;
-    ctx.beginPath(); ctx.arc(-s * 0.1, -s * 0.0, s * 0.065, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(-s * 0.1, s * 0.08); ctx.lineTo(-s * 0.02, s * 0.25); ctx.stroke();
-    ctx.lineWidth = s * 0.07; ctx.beginPath(); ctx.moveTo(-s * 0.02, s * 0.25); ctx.lineTo(-s * 0.13, s * 0.36); ctx.moveTo(-s * 0.02, s * 0.25); ctx.lineTo(s * 0.06, s * 0.36); ctx.stroke();
-    ctx.lineWidth = s * 0.06; ctx.beginPath(); ctx.moveTo(-s * 0.08, s * 0.12); ctx.lineTo(s * 0.1, s * 0.18); ctx.stroke();
-    ctx.lineWidth = s * 0.035; ctx.beginPath(); ctx.moveTo(s * 0.07, s * 0.06); ctx.lineTo(s * 0.2, s * 0.3); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(s * 0.1, s * 0.37); ctx.lineTo(s * 0.3, s * 0.37); ctx.lineTo(s * 0.22, s * 0.29); ctx.closePath(); ctx.fill();
+    /* Triángulo rojo con borde blanco, interior amarillo y operario con pala */
+    const tri = (f, dy = 0) => { const c = s * 0.1067; ctx.beginPath(); ctx.moveTo(0, c + (-s * 0.56 - c) * f + dy); ctx.lineTo(s * 0.56 * f, c + (s * 0.44 - c) * f + dy); ctx.lineTo(-s * 0.56 * f, c + (s * 0.44 - c) * f + dy); ctx.closePath(); };
+    tri(1); sombra(ctx, k); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#fff'; ctx.lineWidth = s * 0.17; ctx.fill(); ctx.stroke(); sinSombra(ctx);
+    tri(1); ctx.fillStyle = '#c8000a'; ctx.strokeStyle = '#c8000a'; ctx.lineWidth = s * 0.09; ctx.fill(); ctx.stroke();
+    tri(0.66, s * 0.012); ctx.fillStyle = '#ffe600'; ctx.strokeStyle = '#ffe600'; ctx.lineWidth = s * 0.012; ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#000'; ctx.strokeStyle = '#000';
+    ctx.beginPath(); ctx.arc(-s * 0.035, -s * 0.03, s * 0.05, 0, 7); ctx.fill();
+    ctx.lineWidth = s * 0.08; ctx.beginPath(); ctx.moveTo(-s * 0.06, s * 0.04); ctx.lineTo(-s * 0.02, s * 0.17); ctx.stroke();
+    ctx.lineWidth = s * 0.06; ctx.beginPath(); ctx.moveTo(-s * 0.02, s * 0.17); ctx.lineTo(-s * 0.1, s * 0.29); ctx.moveTo(-s * 0.02, s * 0.17); ctx.lineTo(s * 0.03, s * 0.29); ctx.stroke();
+    ctx.lineWidth = s * 0.05; ctx.beginPath(); ctx.moveTo(-s * 0.06, s * 0.06); ctx.lineTo(s * 0.04, s * 0.14); ctx.stroke();
+    ctx.lineWidth = s * 0.028; ctx.beginPath(); ctx.moveTo(-s * 0.01, s * 0.08); ctx.lineTo(s * 0.12, s * 0.22); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s * 0.1, s * 0.22); ctx.lineTo(s * 0.17, s * 0.2); ctx.lineTo(s * 0.15, s * 0.28); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(s * 0.13, s * 0.3); ctx.lineTo(s * 0.18, s * 0.22); ctx.lineTo(s * 0.25, s * 0.21); ctx.lineTo(s * 0.31, s * 0.3); ctx.closePath(); ctx.fill();
   } else if (tipo === 'salida') {
     ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); sombra(ctx, k); ctx.fillStyle = '#fff'; ctx.fill(); sinSombra(ctx);
     ctx.beginPath(); ctx.arc(0, 0, r * 0.74, 0, 7); ctx.fillStyle = '#16a34a'; ctx.fill(); ctx.lineWidth = s * 0.04; ctx.strokeStyle = '#0f7a37'; ctx.stroke();
@@ -181,12 +187,17 @@ function nota(ctx, v, n, ui, hits) {
 }
 
 /* ───────── Leyenda automática ───────── */
+/* Todas las filas posibles de la leyenda (cada una con una clave para poder ocultarla) */
+export function filasLeyenda(p) {
+  const filas = [];
+  for (const t of p.trazos) if (t.visible !== false && t.segs.length) filas.push({ key: 't:' + t.id, k: 'linea', t, txt: t.nombre });
+  if (p.trazos.some(t => t.visible !== false && t.flechas && t.flechas.on)) { const t = p.trazos.find(q => q.visible !== false && q.flechas && q.flechas.on); filas.push({ key: 'flecha', k: 'flecha', t, txt: 'Sentido de la marcha' }); }
+  [...new Set(p.marcas.map(m => m.tipo))].forEach(tp => filas.push({ key: 's:' + tp, k: 'senal', tp, txt: SENALES[tp] }));
+  return filas;
+}
 function leyenda(ctx, v, p, area) {
   const L = p.leyenda; if (!L || !L.on) return;
-  const k = v.k, size = L.tam * k, filas = [];
-  for (const t of p.trazos) if (t.visible !== false && t.segs.length) filas.push({ k: 'linea', t, txt: t.nombre });
-  if (p.trazos.some(t => t.visible !== false && t.flechas && t.flechas.on)) { const t = p.trazos.find(q => q.visible !== false && q.flechas && q.flechas.on); filas.push({ k: 'flecha', t, txt: 'Sentido de la marcha' }); }
-  [...new Set(p.marcas.map(m => m.tipo))].forEach(tp => filas.push({ k: 'senal', tp, txt: SENALES[tp] }));
+  const k = v.k, size = L.tam * k, oc = L.ocultos || [], filas = filasLeyenda(p).filter(f => !oc.includes(f.key));
   if (!filas.length) return;
   ctx.save(); ctx.font = `700 ${size}px ${FUENTE}`; let ancho = 0; filas.forEach(f => { ancho = Math.max(ancho, ctx.measureText(f.txt).width); });
   const mu = size * 0.7, icono = size * 2.6, paso = size * 1.75, w = mu * 2 + icono + size * 0.7 + ancho, h = mu * 2 + paso * filas.length - size * 0.35, mg = 18 * k;
