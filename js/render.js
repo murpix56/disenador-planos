@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc } from './net.js?v=20261108d';
+import { net, merc } from './net.js?v=20261108e';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -111,8 +111,8 @@ function triangulo(ctx, s, k) {
   ctx.lineWidth = s * 0.12; ctx.strokeStyle = '#d92d20'; ctx.lineJoin = 'round'; ctx.stroke();
 }
 /* Dibuja una señal centrada en (x, y); s = tamaño en píxeles; k = escala (para sombras) */
-export function dibujarSenal(ctx, tipo, x, y, s, k = 1) {
-  ctx.save(); ctx.translate(x, y); ctx.lineJoin = 'round'; ctx.lineCap = 'round'; const r = s / 2;
+export function dibujarSenal(ctx, tipo, x, y, s, k = 1, rot = 0) {
+  ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot * Math.PI / 180); ctx.lineJoin = 'round'; ctx.lineCap = 'round'; const r = s / 2;
   if (tipo === 'prohibido') {
     ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); sombra(ctx, k); ctx.fillStyle = '#d92d20'; ctx.fill(); sinSombra(ctx);
     ctx.lineWidth = s * 0.08; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.fillRect(-r * 0.64, -s * 0.085, r * 1.28, s * 0.17);
@@ -152,7 +152,7 @@ export function dibujarSenal(ctx, tipo, x, y, s, k = 1) {
 }
 function marca(ctx, v, m, ui, hits) {
   const k = v.k, mm = merc(m.lat, m.lon), [x, y] = v.px(mm[0], mm[1]), s = m.tam * k;
-  dibujarSenal(ctx, m.tipo, x, y, s, k);
+  dibujarSenal(ctx, m.tipo, x, y, s, k, m.rot || 0);
   if (m.texto) {
     const size = (m.ttam || 13) * k, lineas = (m.mayus === false ? m.texto : m.texto.toUpperCase()).split('\n');
     ctx.save(); ctx.font = `800 ${size}px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
