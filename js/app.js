@@ -1,8 +1,8 @@
 /* Diseñador de planos · Policía Local de Don Benito (uso personal)
  * Plano gris y blanco (o calles / satélite), recorrido que sigue las calles, color, flechas y nombres a medida, y descarga en PNG. */
-import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108g';
-import { net, CFG, loadNet, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108g';
-import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, ESTILO_CARTEL } from './render.js?v=20261108g';
+import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108h';
+import { net, CFG, loadNet, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108h';
+import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108h';
 
 /* ───────── Proyecto ───────── */
 const PROY_KEY = 'plano.proyecto.v1';
@@ -89,8 +89,8 @@ map.on('move zoom resize viewreset', redibujar); map.on('moveend', guardarVista)
 new ResizeObserver(() => { map.invalidateSize(); redibujar(); }).observe(cont);
 function aplicarBase() {
   Object.values(bases).forEach(b => { if (map.hasLayer(b)) map.removeLayer(b); });
-  if (S.p.base !== 'gris') bases[S.p.base].addTo(map);
-  cont.style.background = S.p.base === 'gris' ? S.p.gris.fondo : '#dfe5ea'; redibujar();
+  if (bases[S.p.base]) bases[S.p.base].addTo(map);
+  cont.style.background = S.p.base === 'gris' ? S.p.gris.fondo : S.p.base === 'tierra' ? TIERRA.fondo : '#dfe5ea'; redibujar();
 }
 
 /* ───────── Dibujo del recorrido ───────── */
@@ -162,7 +162,7 @@ const fijarSel = el => {
 function colocarAqui(ll) {
   const c = S.colocar; S.colocar = c.k === 'sinflecha' ? c : null;
   if (c.k === 'label') { const t = selTrazoObj(); if (!t) return; const l = nuevaEtiqueta('NOMBRE', ll.lat, ll.lng); t.etiquetas.push(l); S.sel = { ...S.sel, label: l.id }; }
-  else if (c.k === 'marca') { const m = nuevaMarca(c.tipo, ll.lat, ll.lng); S.p.marcas.push(m); S.sel = { ...selVacio(), marca: m.id }; }
+  else if (c.k === 'marca') { const m = nuevaMarca(c.tipo, ll.lat, ll.lng); if (REFERENCIAS[c.tipo]) m.tam = 64; S.p.marcas.push(m); S.sel = { ...selVacio(), marca: m.id }; }
   else if (c.k === 'sinflecha') { const t = selTrazoObj(); if (!t) return; t.flechas.sin = [...(t.flechas.sin || []), { lat: ll.lat, lon: ll.lng, r: S.radioZona }]; }
   else if (c.k === 'nota') { const n = nuevaNota(ll.lat, ll.lng); S.p.notas.push(n); S.sel = { ...selVacio(), nota: n.id }; }
   guardar(); render(); redibujar();
@@ -235,10 +235,10 @@ const ck = (o, k, label, val, id = '') => `<label class="ck"><input type="checkb
 const swatches = (o, k, val) => `<div class="sws">${PALETA.map(c => `<button type="button" class="sw${val === c ? ' on' : ''}" style="background:${c}" data-act="color" data-o="${o}" data-k="${k}" data-v="${c}" aria-label="Color ${c}"></button>`).join('')}</div>`;
 
 function vistaPlano() {
-  const g = S.p.gris, B = [['gris', 'Gris y blanco'], ['osm', 'Calles'], ['sat', 'Satélite']];
+  const g = S.p.gris, B = [['gris', 'Gris y blanco (personalizable)'], ['tierra', 'Beige (tonos tierra)'], ['osm', 'Calles (OpenStreetMap)'], ['sat', 'Satélite (PNOA)']];
   return `<h3>Fondo del plano</h3>
-    <div class="seg">${B.map(([k, l]) => `<button data-act="base" data-b="${k}" class="${S.p.base === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-    ${S.p.base === 'gris' ? `<div class="card grp">${cl('g', 'fondo', 'Color del fondo', g.fondo)}${cl('g', 'calle', 'Color de las calles', g.calle)}${rg('g', 'ancho', 'Grosor de las calles', 0.5, 2, 0.05, g.ancho)}<button class="btn" data-act="gris-def">Restablecer colores</button></div>` : '<p class="mut small">La descarga de imagen solo está disponible con el plano gris y blanco. Con calles o satélite, usa la captura de pantalla.</p>'}
+    <select class="txt" data-base="1" aria-label="Fondo del plano">${B.map(([k, l]) => `<option value="${k}"${S.p.base === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
+    ${S.p.base === 'gris' ? `<div class="card grp">${cl('g', 'fondo', 'Color del fondo', g.fondo)}${cl('g', 'calle', 'Color de las calles', g.calle)}${rg('g', 'ancho', 'Grosor de las calles', 0.5, 2, 0.05, g.ancho)}<button class="btn" data-act="gris-def">Restablecer colores</button></div>` : `<p class="mut small">${S.p.base === 'tierra' ? 'Estilo fijo (fondo crema, manzanas en arena, calles blancas y vías principales amarillentas). También sale en la imagen descargada.' : 'La descarga de imagen solo está disponible con los fondos «Gris y blanco» y «Beige». Con calles o satélite, usa la captura de pantalla.'}</p>`}
     <h3>Callejero de Don Benito</h3><p class="mut small">${esc(S.netTxt)}</p><button class="btn" data-act="red-calles">Descargar de nuevo</button>
     <h3>Ir a una calle</h3><input id="irCalle" class="txt" list="listaCalles" placeholder="Escribe el nombre de la calle…" autocomplete="off"><datalist id="listaCalles"></datalist>`;
 }
@@ -291,7 +291,8 @@ function icono(tipo) { if (!iconos[tipo]) { const c = document.createElement('ca
 function vistaSenales() {
   const m = S.sel.marca && S.p.marcas.find(x => x.id === S.sel.marca), n = S.sel.nota && S.p.notas.find(x => x.id === S.sel.nota), L = S.p.leyenda, col = S.colocar;
   const items = [...S.p.marcas.map(x => ({ k: 'marca', id: x.id, t: SENALES[x.tipo] + (x.texto ? ' · ' + x.texto : ''), ic: icono(x.tipo) })), ...S.p.notas.map(x => ({ k: 'nota', id: x.id, t: x.texto.split('\n')[0], ic: '' }))];
-  return `<h3>Señales</h3><div class="pal">${Object.entries(SENALES).map(([k, l]) => `<button class="pb${col && col.tipo === k ? ' on' : ''}" data-act="poner" data-tipo="${k}"><img src="${icono(k)}" alt="" width="44" height="44"><span>${l}</span></button>`).join('')}</div>
+  return `<h3>Señales de tráfico</h3><div class="pal">${Object.entries(TRAFICO).map(([k, l]) => `<button class="pb${col && col.tipo === k ? ' on' : ''}" data-act="poner" data-tipo="${k}"><img src="${icono(k)}" alt="" width="44" height="44"><span>${l}</span></button>`).join('')}</div>
+    <h3>Puntos de referencia</h3><div class="pal">${Object.entries(REFERENCIAS).map(([k, l]) => `<button class="pb${col && col.tipo === k ? ' on' : ''}" data-act="poner" data-tipo="${k}"><img src="${icono(k)}" alt="" width="44" height="44"><span>${l}</span></button>`).join('')}</div>
     ${col && col.k === 'marca' ? `<div class="hint">Pulsa en el mapa donde quieras la señal de «${SENALES[col.tipo]}».</div>` : ''}
     <h3>Cuadro de texto</h3><button class="btn" data-act="poner-nota">＋ Añadir cuadro de texto</button>${col && col.k === 'nota' ? '<div class="hint">Pulsa en el mapa donde quieras el cuadro.</div>' : ''}
     ${m ? `<h3>Señal seleccionada</h3><div class="card">${rg('ma', 'tam', 'Tamaño', 20, 120, 2, m.tam)}${rg('ma', 'rot', 'Giro (°)', -180, 180, 5, m.rot || 0)}<div class="btns"><button class="btn" data-act="giro" data-g="-90">⟲ 90°</button><button class="btn" data-act="giro" data-g="90">⟳ 90°</button><button class="btn" data-act="giro" data-g="0">Recto</button></div><label class="txtl"><span>Texto debajo (opcional)</span><input class="txt" value="${esc(m.texto)}" data-o="ma" data-k="texto" data-ty="s" placeholder="Ej.: C/ San Francisco"></label>${m.texto ? `${rg('ma', 'ttam', 'Tamaño del texto', 8, 30, 1, m.ttam)}${cl('ma', 'color', 'Color del texto', m.color)}` : ''}</div><div class="btns"><button class="btn dng" data-act="quitar-sel">Quitar señal</button></div>` : ''}
@@ -303,14 +304,14 @@ function vistaSenales() {
       ${rg('le', 'tam', 'Tamaño del texto', 10, 30, 1, L.tam)}${cl('le', 'borde', 'Color del borde', L.borde)}<p class="mut small">Se rellena sola con los trazos, el sentido de la marcha y las señales usadas; desmarca lo que no quieras. Se coloca dentro del marco de la pestaña Exportar.</p></div>` : ''}`;
 }
 function vistaExportar() {
-  const f = S.marco, gris = S.p.base === 'gris', bib = leerBib(), enLista = !!S.p.libId && bib.some(x => x.id === S.p.libId);
+  const f = S.marco, gris = S.p.base === 'gris' || S.p.base === 'tierra', bib = leerBib(), enLista = !!S.p.libId && bib.some(x => x.id === S.p.libId);
   return `<h3>Imagen para redes</h3>
     <div class="seg g2">${FORMATOS.map(([k, l]) => `<button data-act="fmt" data-f="${k}" class="${f.fmt === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     ${ck('mar', 'on', 'Mostrar el marco en el mapa', f.on)}
     <p class="mut small">Mueve y acerca el mapa para que lo que quieres quede dentro del marco. Se descargará solo esa zona.</p>
     <div class="btns"><button class="btn" data-act="encuadrar">Encuadrar el plano</button><button class="btn" data-act="copiar" ${gris ? '' : 'disabled'}>Copiar imagen</button></div>
     <button class="btn pri big" data-act="png" ${gris ? '' : 'disabled'}>Descargar PNG</button>
-    ${gris ? '' : '<p class="mut small">Cambia a «Gris y blanco» en la pestaña Plano para descargar la imagen.</p>'}
+    ${gris ? '' : '<p class="mut small">Cambia a «Gris y blanco» o «Beige» en la pestaña Plano para descargar la imagen.</p>'}
     <h3>Mis planos</h3>
     <div class="card"><button class="btn pri big" data-act="bib-guardar">${enLista ? 'Actualizar en «Mis planos»' : 'Guardar en «Mis planos»'}</button>
       <p class="mut small">${enLista ? 'Este plano está en la lista y se actualiza solo con cada cambio, incluida la zona del mapa.' : 'Ponle un nombre claro arriba y guárdalo. Después se mantiene al día solo y podrás volver a él cuando quieras.'}</p></div>
@@ -334,6 +335,7 @@ const fijar = (obj, k, v) => { obj[k] = v; };
 panel.addEventListener('input', ev => {
   const e = ev.target;
   if (e.id === 'irCalle') { $('#listaCalles').innerHTML = searchStreets(e.value).map(n => `<option value="${esc(n)}">`).join(''); const b = streetBounds(e.value); if (b) map.fitBounds(b, { padding: [40, 40], maxZoom: 18 }); return; }
+  if (e.dataset.base) { S.p.base = e.value; aplicarBase(); guardar(); render(); return; }
   if (e.id === 'abrev') { S.abreviar = e.checked; return; }
   if (e.dataset.lk) { const L = S.p.leyenda, oc = (L.ocultos || []).filter(x => x !== e.dataset.lk); if (!e.checked) oc.push(e.dataset.lk); L.ocultos = oc; guardar(); redibujar(); return; }
   if (!e.dataset.o) return;
