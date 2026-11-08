@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc, manzanas } from './net.js?v=20261108l';
+import { net, merc, manzanas } from './net.js?v=20261108m';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -57,7 +57,7 @@ function callesTierra(ctx, v, p) {
       ctx.closePath(); ctx.fill();
     }
   }
-  if (net.verdes && net.verdes.length) {                                /* zonas verdes (parques, jardines, césped) */
+  if (net.verdes && net.verdes.length && !(p.tierra && p.tierra.verdes === false)) { /* zonas verdes (se pueden ocultar: entonces quedan como manzana) (parques, jardines, césped) */
     ctx.fillStyle = TIERRA.verde; ctx.strokeStyle = TIERRA.verdeBorde; ctx.lineWidth = 1.4 * k;
     const ox0 = v.cx - v.w / 2 / v.S, ox1 = v.cx + v.w / 2 / v.S, oy0 = v.cy - v.h / 2 / v.S, oy1 = v.cy + v.h / 2 / v.S;
     for (const a of net.verdes) {
