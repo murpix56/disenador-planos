@@ -38,6 +38,9 @@ Herramienta **personal** (de un subinspector de la Policía Local de Don Benito)
 ## Pruebas
 `pruebas/LEEME.md`: `node pruebas/plano.js` y `node pruebas/plano2.js` (Playwright, callejero simulado). Terminan con `ERRORES: []`.
 
+## Visibilidad
+Repositorio y página públicos (GitHub Free). La página lleva `noindex, nofollow, noarchive` para que los buscadores no la indexen; no hay datos sensibles (los planos se guardan en el navegador del usuario). Hacerlo privado despublicaría Pages (ver conversación del 2026-11-08).
+
 ## Pendiente / ideas (no pedidas aún)
 - **Escala general** (un deslizador que escale a la vez nombres, señales, flechas y leyenda): al alejar el plano tras ajustarlo de cerca, los tamaños no se mantienen proporcionales. El usuario lo ve «interesante, no imprescindible»; retomar si lo echa en falta.
 - Exportar también con satélite / plano de calles (teselas con CORS; hay que dibujarlas en el canvas de exportación).
