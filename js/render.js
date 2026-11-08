@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc } from './net.js?v=20261108f';
+import { net, merc } from './net.js?v=20261108g';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -40,18 +40,27 @@ function flecha(ctx, x, y, ang, s, doble = false) {
   ctx.beginPath(); ctx.moveTo(-L / 2, -sw / 2); ctx.lineTo(L / 2 - hl, -sw / 2); ctx.lineTo(L / 2 - hl, -hw / 2); ctx.lineTo(L / 2, 0);
   ctx.lineTo(L / 2 - hl, hw / 2); ctx.lineTo(L / 2 - hl, sw / 2); ctx.lineTo(-L / 2, sw / 2); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore();
 }
+/* Zonas sin flechas (ancladas al mapa, en metros) convertidas a píxeles de esta vista */
+const zonasPx = (v, f) => (f.sin || []).map(z => { const m = merc(z.lat, z.lon), q = v.px(m[0], m[1]); return { x: q[0], y: q[1], r: z.r / v.mpp }; });
 function flechas(ctx, v, t, segs, evitar = []) {
   const f = t.flechas, k = v.k, size = f.tam * k, sep = f.sep * k; if (sep < 8 || size < 2) return;
+  const L = size * (f.doble ? 2.2 : 1.5), zonas = zonasPx(v, f);
   ctx.fillStyle = f.color; ctx.strokeStyle = f.borde || '#ffffff'; ctx.lineWidth = 2 * k; ctx.lineJoin = 'round'; ctx.setLineDash([]);
   for (const s of segs) {
     const cum = [0]; for (let i = 1; i < s.length; i++) cum.push(cum[i - 1] + Math.hypot(s[i][0] - s[i - 1][0], s[i][1] - s[i - 1][1]));
-    const total = cum[cum.length - 1]; let d = sep / 2, i = 1;
-    while (d < total) {
-      while (i < cum.length - 1 && cum[i] < d) i++;
-      const a = s[i - 1], b = s[i], seg = cum[i] - cum[i - 1] || 1, u = (d - cum[i - 1]) / seg;
-      const ax = a[0] + (b[0] - a[0]) * u, ay = a[1] + (b[1] - a[1]) * u;
-      if (!evitar.some(e => Math.hypot(e.x - ax, e.y - ay) < e.r + size * 0.6)) flecha(ctx, ax, ay, Math.atan2(b[1] - a[1], b[0] - a[0]), size, !!f.doble);
-      d += sep;
+    const total = cum[cum.length - 1];
+    const pos = d => { let j = 1; while (j < cum.length - 1 && cum[j] < d) j++; const a = s[j - 1], b = s[j], u = (d - cum[j - 1]) / (cum[j] - cum[j - 1] || 1); return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, Math.atan2(b[1] - a[1], b[0] - a[0])]; };
+    /* La flecha solo se pone donde el trazo es casi recto en toda su longitud: así no aparecen en glorietas ni curvas cerradas, a cualquier zoom */
+    const recta = d => { const p0 = pos(Math.max(0, d - L / 2)), p1 = pos(d), p2 = pos(Math.min(total, d + L / 2)), ax = p1[0] - p0[0], ay = p1[1] - p0[1], bx = p2[0] - p1[0], by = p2[1] - p1[1], la = Math.hypot(ax, ay), lb = Math.hypot(bx, by); if (la < 1e-6 || lb < 1e-6) return true; return Math.acos(Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb)))) < 0.45; };
+    let nominal = sep / 2, ultimo = -1e9;
+    while (nominal < total) {
+      for (const o of [0, 0.12, -0.12, 0.24, -0.24, 0.36, -0.36]) {
+        const d = nominal + o * sep; if (d <= 0 || d >= total || d - ultimo < sep * 0.6 || !recta(d) || !recta(Math.max(L / 2, d - L * 0.6)) || !recta(Math.min(total - L / 2, d + L * 0.6))) continue;
+        const [ax, ay, ang] = pos(d);
+        if (zonas.some(z => Math.hypot(z.x - ax, z.y - ay) < z.r) || evitar.some(e => Math.hypot(e.x - ax, e.y - ay) < e.r + size * 0.6)) continue;
+        flecha(ctx, ax, ay, ang, size, !!f.doble); ultimo = d; break;
+      }
+      nominal += sep;
     }
   }
 }
@@ -65,6 +74,7 @@ function trazo(ctx, v, t, ui, hits, cache) {
   if (t.borde !== false && !t.discontinuo) { ctx.strokeStyle = t.bordeColor || '#ffffff'; ctx.lineWidth = w + 5 * k; trazar(); }
   ctx.strokeStyle = t.color; ctx.lineWidth = w; if (t.discontinuo) ctx.setLineDash([w * 2.2, w * 1.6]); trazar(); ctx.setLineDash([]);
   if (t.flechas && t.flechas.on) flechas(ctx, v, t, segs, t.etiquetas.filter(l => l.visible !== false).map(l => { const m = merc(l.lat, l.lon), q = v.px(m[0], m[1]); return { x: q[0], y: q[1], r: String(l.texto).length * l.tam * k * 0.33 }; }));
+  if (ui.ui && ui.sel && ui.sel.trazo === t.id && t.flechas) for (const z of zonasPx(v, t.flechas)) { ctx.save(); ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, 7); ctx.fillStyle = 'rgba(217,45,32,.10)'; ctx.fill(); ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = '#d92d20'; ctx.stroke(); ctx.restore(); }
   hits.trazos.push({ id: t.id, segs, w: Math.max(w, 16) });
 }
 

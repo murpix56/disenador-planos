@@ -1,8 +1,8 @@
 /* Diseñador de planos · Policía Local de Don Benito (uso personal)
  * Plano gris y blanco (o calles / satélite), recorrido que sigue las calles, color, flechas y nombres a medida, y descarga en PNG. */
-import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108f';
-import { net, CFG, loadNet, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108f';
-import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, ESTILO_CARTEL } from './render.js?v=20261108f';
+import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108g';
+import { net, CFG, loadNet, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108g';
+import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, ESTILO_CARTEL } from './render.js?v=20261108g';
 
 /* ───────── Proyecto ───────── */
 const PROY_KEY = 'plano.proyecto.v1';
@@ -61,7 +61,7 @@ function irHist(dir) {
 const deshacerProy = () => irHist(-1), rehacerProy = () => irHist(1);
 
 const selVacio = () => ({ trazo: null, label: null, marca: null, nota: null });
-const S = { p: cargar(), tab: 'trazos', sel: selVacio(), preset: 'itinerario', autoMarcas: true, dib: null, hover: null, colocar: null, drag: null, suprimir: false, abreviar: true, netTxt: 'Cargando callejero…', marco: { on: true, fmt: '1080x1080', w: 1080, h: 1080, px: { w: 0, h: 0 } } };
+const S = { p: cargar(), tab: 'trazos', sel: selVacio(), preset: 'itinerario', autoMarcas: true, dib: null, hover: null, colocar: null, drag: null, suprimir: false, abreviar: true, radioZona: 25, netTxt: 'Cargando callejero…', marco: { on: true, fmt: '1080x1080', w: 1080, h: 1080, px: { w: 0, h: 0 } } };
 const selTrazoObj = () => S.p.trazos.find(t => t.id === S.sel.trazo);
 const buscarEt = id => { for (const t of S.p.trazos) { const l = t.etiquetas.find(x => x.id === id); if (l) return l; } return null; };
 
@@ -160,9 +160,10 @@ const fijarSel = el => {
   else { S.sel = { ...selVacio(), nota: el.id }; S.tab = 'senales'; }
 };
 function colocarAqui(ll) {
-  const c = S.colocar; S.colocar = null;
+  const c = S.colocar; S.colocar = c.k === 'sinflecha' ? c : null;
   if (c.k === 'label') { const t = selTrazoObj(); if (!t) return; const l = nuevaEtiqueta('NOMBRE', ll.lat, ll.lng); t.etiquetas.push(l); S.sel = { ...S.sel, label: l.id }; }
   else if (c.k === 'marca') { const m = nuevaMarca(c.tipo, ll.lat, ll.lng); S.p.marcas.push(m); S.sel = { ...selVacio(), marca: m.id }; }
+  else if (c.k === 'sinflecha') { const t = selTrazoObj(); if (!t) return; t.flechas.sin = [...(t.flechas.sin || []), { lat: ll.lat, lon: ll.lng, r: S.radioZona }]; }
   else if (c.k === 'nota') { const n = nuevaNota(ll.lat, ll.lng); S.p.notas.push(n); S.sel = { ...selVacio(), nota: n.id }; }
   guardar(); render(); redibujar();
 }
@@ -253,7 +254,11 @@ function vistaTrazos() {
       <div class="dos">${ck('t', 'borde', 'Borde blanco', t.borde !== false)}${ck('t', 'discontinuo', 'Discontinuo', t.discontinuo)}</div>
       <h3>Flechas de sentido</h3>${ck('fl', 'on', 'Mostrar flechas', t.flechas.on)}
       ${t.flechas.on ? ck('fl', 'doble', 'Doble sentido (flecha con dos puntas)', t.flechas.doble) : ''}
-      ${t.flechas.on ? `${cl('fl', 'color', 'Color de la flecha', t.flechas.color)}${rg('fl', 'tam', 'Tamaño', 8, 44, 1, t.flechas.tam)}${rg('fl', 'sep', 'Separación', 80, 520, 10, t.flechas.sep)}` : ''}</div>
+      ${t.flechas.on ? `${cl('fl', 'color', 'Color de la flecha', t.flechas.color)}${rg('fl', 'tam', 'Tamaño', 8, 44, 1, t.flechas.tam)}${rg('fl', 'sep', 'Separación', 80, 520, 10, t.flechas.sep)}
+        <div class="lbl">Quitar flechas de una zona</div>${rg('au', 'radioZona', 'Radio (m)', 5, 100, 5, S.radioZona)}
+        <button class="btn${S.colocar && S.colocar.k === 'sinflecha' ? ' pri' : ''}" data-act="sinflecha">${S.colocar && S.colocar.k === 'sinflecha' ? 'Terminar' : '✕ Marcar zona en el mapa'}</button>
+        ${S.colocar && S.colocar.k === 'sinflecha' ? '<div class="hint">Pulsa en el mapa sobre la glorieta o el punto donde sobran flechas. Puedes marcar varias.</div>' : ''}
+        ${(t.flechas.sin || []).length ? `<div class="lista">${t.flechas.sin.map((z, i) => `<div class="fila"><b>Zona ${i + 1} · ${z.r} m</b><button class="ico dng" data-act="sinflecha-del" data-i="${i}" title="Quitar zona" aria-label="Quitar zona">✕</button></div>`).join('')}</div>` : ''}` : ''}</div>
       <div class="btns"><button class="btn" data-act="rehacer">Volver a dibujar</button><button class="btn" data-act="dupt">Duplicar</button><button class="btn dng" data-act="delt" data-id="${t.id}">Eliminar</button></div>` : ''}`;
 }
 function vistaDibujo() {
@@ -364,6 +369,8 @@ const alClic = ev => {
     case 'cancelar': cancelarDibujo(); break;
     case 'terminar': terminarDibujo(); break;
     case 'colocar': S.colocar = { k: 'label' }; render(); break;
+    case 'sinflecha': S.colocar = S.colocar && S.colocar.k === 'sinflecha' ? null : { k: 'sinflecha' }; render(); break;
+    case 'sinflecha-del': if (t) { t.flechas.sin.splice(+b.dataset.i, 1); guardar(); render(); redibujar(); } break;
     case 'poner': S.colocar = { k: 'marca', tipo: b.dataset.tipo }; render(); break;
     case 'poner-nota': S.colocar = { k: 'nota' }; render(); break;
     case 'sel-el': S.sel = b.dataset.k === 'marca' ? { ...selVacio(), marca: b.dataset.id } : { ...selVacio(), nota: b.dataset.id }; render(); redibujar(); break;
