@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc } from './net.js?v=20261108e';
+import { net, merc } from './net.js?v=20261108f';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -30,9 +30,13 @@ function calles(ctx, v, p) {
 }
 
 /* ───────── Flechas de sentido ───────── */
-function flecha(ctx, x, y, ang, s) {
+function flecha(ctx, x, y, ang, s, doble = false) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
-  const L = s * 1.5, sw = s * 0.42, hw = s, hl = s * 0.8;
+  const L = s * (doble ? 2.2 : 1.5), sw = s * 0.42, hw = s, hl = s * 0.8;
+  if (doble) { /* flecha con punta en los dos extremos: calle de doble sentido */
+    ctx.beginPath(); ctx.moveTo(-L / 2, 0); ctx.lineTo(-L / 2 + hl, -hw / 2); ctx.lineTo(-L / 2 + hl, -sw / 2); ctx.lineTo(L / 2 - hl, -sw / 2); ctx.lineTo(L / 2 - hl, -hw / 2); ctx.lineTo(L / 2, 0);
+    ctx.lineTo(L / 2 - hl, hw / 2); ctx.lineTo(L / 2 - hl, sw / 2); ctx.lineTo(-L / 2 + hl, sw / 2); ctx.lineTo(-L / 2 + hl, hw / 2); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore(); return;
+  }
   ctx.beginPath(); ctx.moveTo(-L / 2, -sw / 2); ctx.lineTo(L / 2 - hl, -sw / 2); ctx.lineTo(L / 2 - hl, -hw / 2); ctx.lineTo(L / 2, 0);
   ctx.lineTo(L / 2 - hl, hw / 2); ctx.lineTo(L / 2 - hl, sw / 2); ctx.lineTo(-L / 2, sw / 2); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore();
 }
@@ -46,7 +50,7 @@ function flechas(ctx, v, t, segs, evitar = []) {
       while (i < cum.length - 1 && cum[i] < d) i++;
       const a = s[i - 1], b = s[i], seg = cum[i] - cum[i - 1] || 1, u = (d - cum[i - 1]) / seg;
       const ax = a[0] + (b[0] - a[0]) * u, ay = a[1] + (b[1] - a[1]) * u;
-      if (!evitar.some(e => Math.hypot(e.x - ax, e.y - ay) < e.r + size * 0.6)) flecha(ctx, ax, ay, Math.atan2(b[1] - a[1], b[0] - a[0]), size);
+      if (!evitar.some(e => Math.hypot(e.x - ax, e.y - ay) < e.r + size * 0.6)) flecha(ctx, ax, ay, Math.atan2(b[1] - a[1], b[0] - a[0]), size, !!f.doble);
       d += sep;
     }
   }
@@ -191,7 +195,7 @@ function nota(ctx, v, n, ui, hits) {
 export function filasLeyenda(p) {
   const filas = [];
   for (const t of p.trazos) if (t.visible !== false && t.segs.length) filas.push({ key: 't:' + t.id, k: 'linea', t, txt: t.nombre });
-  if (p.trazos.some(t => t.visible !== false && t.flechas && t.flechas.on)) { const t = p.trazos.find(q => q.visible !== false && q.flechas && q.flechas.on); filas.push({ key: 'flecha', k: 'flecha', t, txt: 'Sentido de la marcha' }); }
+  if (p.trazos.some(t => t.visible !== false && t.flechas && t.flechas.on)) { const t = p.trazos.find(q => q.visible !== false && q.flechas && q.flechas.on); filas.push({ key: 'flecha', k: 'flecha', t, txt: t.flechas.doble ? 'Doble sentido' : 'Sentido de la marcha' }); }
   [...new Set(p.marcas.map(m => m.tipo))].forEach(tp => filas.push({ key: 's:' + tp, k: 'senal', tp, txt: SENALES[tp] }));
   return filas;
 }
@@ -207,7 +211,7 @@ function leyenda(ctx, v, p, area) {
   filas.forEach((f, i) => {
     const yy = y0 + mu + paso * i + paso * 0.4, xi = x0 + mu + icono / 2;
     if (f.k === 'linea') { ctx.lineCap = 'round'; ctx.setLineDash(f.t.discontinuo ? [size * 0.6, size * 0.45] : []); ctx.strokeStyle = f.t.color; ctx.lineWidth = Math.min(f.t.ancho, 12) * k; ctx.beginPath(); ctx.moveTo(x0 + mu + size * 0.2, yy); ctx.lineTo(x0 + mu + icono - size * 0.2, yy); ctx.stroke(); ctx.setLineDash([]); }
-    else if (f.k === 'flecha') { ctx.fillStyle = f.t.flechas.color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 * k; flecha(ctx, xi, yy, 0, size * 1.1); }
+    else if (f.k === 'flecha') { ctx.fillStyle = f.t.flechas.color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 * k; flecha(ctx, xi, yy, 0, size * 1.1, !!f.t.flechas.doble); }
     else dibujarSenal(ctx, f.tp, xi, yy, size * 1.45, k);
     ctx.fillStyle = L.color; ctx.font = `700 ${size}px ${FUENTE}`; ctx.fillText(f.txt, x0 + mu + icono + size * 0.7, yy);
   });

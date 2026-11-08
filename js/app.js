@@ -1,8 +1,8 @@
 /* Diseñador de planos · Policía Local de Don Benito (uso personal)
  * Plano gris y blanco (o calles / satélite), recorrido que sigue las calles, color, flechas y nombres a medida, y descarga en PNG. */
-import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108e';
-import { net, CFG, loadNet, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108e';
-import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, ESTILO_CARTEL } from './render.js?v=20261108e';
+import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108f';
+import { net, CFG, loadNet, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108f';
+import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, ESTILO_CARTEL } from './render.js?v=20261108f';
 
 /* ───────── Proyecto ───────── */
 const PROY_KEY = 'plano.proyecto.v1';
@@ -252,6 +252,7 @@ function vistaTrazos() {
       ${rg('t', 'ancho', 'Grosor', 2, 26, 1, t.ancho)}
       <div class="dos">${ck('t', 'borde', 'Borde blanco', t.borde !== false)}${ck('t', 'discontinuo', 'Discontinuo', t.discontinuo)}</div>
       <h3>Flechas de sentido</h3>${ck('fl', 'on', 'Mostrar flechas', t.flechas.on)}
+      ${t.flechas.on ? ck('fl', 'doble', 'Doble sentido (flecha con dos puntas)', t.flechas.doble) : ''}
       ${t.flechas.on ? `${cl('fl', 'color', 'Color de la flecha', t.flechas.color)}${rg('fl', 'tam', 'Tamaño', 8, 44, 1, t.flechas.tam)}${rg('fl', 'sep', 'Separación', 80, 520, 10, t.flechas.sep)}` : ''}</div>
       <div class="btns"><button class="btn" data-act="rehacer">Volver a dibujar</button><button class="btn" data-act="dupt">Duplicar</button><button class="btn dng" data-act="delt" data-id="${t.id}">Eliminar</button></div>` : ''}`;
 }
