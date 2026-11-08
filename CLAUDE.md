@@ -39,8 +39,9 @@ Herramienta **personal** (de un subinspector de la Policía Local de Don Benito)
 `pruebas/LEEME.md`: `node pruebas/plano.js` y `node pruebas/plano2.js` (Playwright, callejero simulado). Terminan con `ERRORES: []`.
 
 ## Pendiente / ideas (no pedidas aún)
+- **Escala general** (un deslizador que escale a la vez nombres, señales, flechas y leyenda): al alejar el plano tras ajustarlo de cerca, los tamaños no se mantienen proporcionales. El usuario lo ve «interesante, no imprescindible»; retomar si lo echa en falta.
 - Exportar también con satélite / plano de calles (teselas con CORS; hay que dibujarlas en el canvas de exportación).
-- Más señales o rotarlas; seleccionar varios elementos; alinear.
+- Más señales; seleccionar varios elementos; alinear.
 - Plantilla de cartel completo (cabecera, caja de información, pie) o marco con escudo.
 - Editar vértices de un trazo; flechas en un solo punto; sentido contrario.
 - Probar con el callejero **real** de Don Benito (hasta ahora solo con rejilla de pruebas): ajustar grosores de calle, tono de gris y tamaños por defecto.
