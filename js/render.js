@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc } from './net.js?v=20261108i';
+import { net, merc, manzanas } from './net.js?v=20261108j';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -48,6 +48,15 @@ function callesTierra(ctx, v) {
   };
   const ancho = m => Math.min(70 * k, Math.max(1.3 * k, m / v.mpp)), cas = 2.6 * k;
   if (halo > 4 * k) pasada([7.5, 10, 13], halo, TIERRA.manzana);       /* las zonas con calles se tiñen de arena: manzanas */
+  { /* manzanas: cada espacio entre calles, de un color sólido (colegios y demás edificios incluidos) */
+    ctx.fillStyle = TIERRA.manzana;
+    const ox0 = v.cx - v.w / 2 / v.S, ox1 = v.cx + v.w / 2 / v.S, oy0 = v.cy - v.h / 2 / v.S, oy1 = v.cy + v.h / 2 / v.S;
+    for (const a of manzanas()) {
+      const b = a.b; if (b[2] < ox0 || b[0] > ox1 || b[3] < oy0 || b[1] > oy1) continue;
+      ctx.beginPath(); for (let i = 0; i < a.mx.length; i++) { const x = (a.mx[i] - v.cx) * v.S + v.w / 2, y = (a.my[i] - v.cy) * v.S + v.h / 2; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+      ctx.closePath(); ctx.fill();
+    }
+  }
   if (net.verdes && net.verdes.length) {                                /* zonas verdes (parques, jardines, césped) */
     ctx.fillStyle = TIERRA.verde; ctx.strokeStyle = TIERRA.verdeBorde; ctx.lineWidth = 1.4 * k;
     const ox0 = v.cx - v.w / 2 / v.S, ox1 = v.cx + v.w / 2 / v.S, oy0 = v.cy - v.h / 2 / v.S, oy1 = v.cy + v.h / 2 / v.S;
@@ -182,7 +191,7 @@ function dibujarRef(ctx, tipo, s) {
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.4; ctx.strokeRect(-40, -26, 80, 52); ctx.strokeRect(-40, -13, 14, 26); ctx.strokeRect(26, -13, 14, 26);
     ctx.beginPath(); ctx.moveTo(0, -26); ctx.lineTo(0, 26); ctx.stroke(); disco(ctx, 0, 0, 9, null, '#ffffff');
   } else if (tipo === 'arco' || tipo === 'arcosalida' || tipo === 'arcometa') {
-    const meta = tipo === 'arcometa', liso = tipo === 'arco', col = meta ? '#101828' : liso ? '#1d5fb5' : '#16a34a';
+    const meta = tipo === 'arcometa', liso = tipo === 'arco', col = meta ? '#101828' : '#16a34a';
     ctx.translate(0, -5);
     rect(ctx, -44, -4, 12, 44, '#e5e7eb', O); rect(ctx, 32, -4, 12, 44, '#e5e7eb', O); rect(ctx, -44, 22, 12, 6, col); rect(ctx, 32, 22, 12, 6, col);
     rect(ctx, -48, -36, 96, 32, col, O);

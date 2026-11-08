@@ -1,5 +1,5 @@
 /* Callejero (OpenStreetMap vía Overpass), grafo, ajuste a calle, rutas y localización de tramos por nombre */
-import { lsGet, lsSet, normName, lengthM } from './util.js?v=20261108i';
+import { lsGet, lsSet, normName, lengthM } from './util.js?v=20261108j';
 
 export const CFG = {
   center: [38.9565, -5.8612], zoom: 15,
@@ -17,8 +17,35 @@ export const merc = (lat, lon) => [(lon + 180) / 360, 0.5 - Math.log(Math.tan(Ma
 /* Anchura de dibujo (m) según el tipo de vía */
 export const anchoVia = h => (/^(motorway|trunk|primary)/.test(h) ? 13 : /^(secondary|tertiary)/.test(h) ? 10 : /^(residential|unclassified|living_street|pedestrian)/.test(h) ? 7.5 : 4.5);
 
+/* Manzanas: cada espacio cerrado entre calles (las caras del grafo de calles), para rellenarlas de un color sólido.
+ * Se descartan la cara exterior y las zonas enormes (campo abierto). Se calcula una vez por callejero. */
+export function manzanas() {
+  if (net._man) return net._man;
+  const N = net.lat.length, nb = new Array(N), AREA_MAX = 120000, AREA_MIN = 60;
+  for (let u = 0; u < N; u++) {
+    const seen = new Set(), l = [];
+    for (const e of net.adj[u]) { const v = e[0]; if (v !== u && !seen.has(v)) { seen.add(v); l.push(v); } }
+    l.sort((a, b) => Math.atan2(net.Y[a] - net.Y[u], net.X[a] - net.X[u]) - Math.atan2(net.Y[b] - net.Y[u], net.X[b] - net.X[u]));
+    nb[u] = l;
+  }
+  const idx = new Map(); for (let u = 0; u < N; u++) nb[u].forEach((v, i) => idx.set(u * N + v, i));
+  const vis = nb.map(l => new Uint8Array(l.length)), out = [];
+  for (let u = 0; u < N; u++) for (let i = 0; i < nb[u].length; i++) {
+    if (vis[u][i]) continue;
+    const ring = []; let a = u, k = i, g = 0;
+    while (!vis[a][k] && g++ < 200000) { vis[a][k] = 1; ring.push(a); const b = nb[a][k], j = idx.get(b * N + a), L = nb[b].length; a = b; k = (j - 1 + L) % L; }
+    if (ring.length < 3) continue;
+    let area = 0; for (let q = 0; q < ring.length; q++) { const p1 = ring[q], p2 = ring[(q + 1) % ring.length]; area += net.X[p1] * net.Y[p2] - net.X[p2] * net.Y[p1]; }
+    area /= 2; if (!(area > AREA_MIN && area < AREA_MAX)) continue;
+    const mx = new Float64Array(ring.length), my = new Float64Array(ring.length); let x0 = 9, y0 = 9, x1 = -9, y1 = -9;
+    ring.forEach((p, q) => { const m = merc(net.lat[p], net.lon[p]); mx[q] = m[0]; my[q] = m[1]; if (m[0] < x0) x0 = m[0]; if (m[0] > x1) x1 = m[0]; if (m[1] < y0) y0 = m[1]; if (m[1] > y1) y1 = m[1]; });
+    out.push({ mx, my, b: [x0, y0, x1, y1] });
+  }
+  net._man = out; return out;
+}
+
 export function buildNet(ways) {
-  Object.assign(net, { ready: false, adj: [], X: [], Y: [], lat: [], lon: [], ea: [], eb: [], el: [], en: [], names: [], lines: [], rl: [], nways: ways.length, _ni: null, _ne: null });
+  Object.assign(net, { _man: null, ready: false, adj: [], X: [], Y: [], lat: [], lon: [], ea: [], eb: [], el: [], en: [], names: [], lines: [], rl: [], nways: ways.length, _ni: null, _ne: null });
   const idx = new Map(), nameIdx = new Map();
   const nm = s => { s = s || ''; if (!nameIdx.has(s)) { nameIdx.set(s, net.names.length); net.names.push(s); } return nameIdx.get(s); };
   const node = (id, lat, lon) => {
