@@ -1,8 +1,8 @@
 /* Diseñador de planos · Policía Local de Don Benito (uso personal)
  * Plano gris y blanco (o calles / satélite), recorrido que sigue las calles, color, flechas y nombres a medida, y descarga en PNG. */
-import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108m';
-import { net, CFG, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108m';
-import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108m';
+import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108n';
+import { net, CFG, DON_BENITO, setZona, buscarZona, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108n';
+import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108n';
 
 /* ───────── Proyecto ───────── */
 const PROY_KEY = 'plano.proyecto.v1';
@@ -249,7 +249,10 @@ function vistaPlano() {
   return `<h3>Fondo del plano</h3>
     <div class="selmuestra"><select class="txt" data-base="1" aria-label="Fondo del plano">${B.map(([k, l]) => `<option value="${k}"${S.p.base === k ? ' selected' : ''}>${l}</option>`).join('')}</select><span id="muestraBase" class="muestra" style="${estiloMuestra()}" title="Muestra del fondo elegido"></span></div>
     ${S.p.base === 'gris' ? `<div class="card grp">${cl('g', 'fondo', 'Color del fondo', g.fondo)}${cl('g', 'calle', 'Color de las calles', g.calle)}${rg('g', 'ancho', 'Grosor de las calles', 0.5, 2, 0.05, g.ancho)}<button class="btn" data-act="gris-def">Restablecer colores</button></div>` : `${S.p.base === 'tierra' ? `<div class="card grp">${rg('ti', 'ancho', 'Grosor de las calles', 0.5, 2, 0.05, S.p.tierra.ancho)}${ck('ti', 'verdes', 'Mostrar zonas verdes', S.p.tierra.verdes !== false)}<button class="btn" data-act="tierra-def">Restablecer ajustes</button></div>` : ''}<p class="mut small">${S.p.base === 'tierra' ? 'Colores fijos (fondo crema, manzanas en arena, calles blancas y zonas verdes de OpenStreetMap: parques, jardines y césped). También sale en la imagen descargada.' : 'La descarga de imagen solo está disponible con los fondos «Gris y blanco» y «Beige». Con calles o satélite, usa la captura de pantalla.'}</p>`}
-    <h3>Callejero de Don Benito</h3><p class="mut small">${esc(S.netTxt)}</p><button class="btn" data-act="red-calles">Descargar de nuevo</button>
+    <h3>Callejero de ${esc(CFG.nombre)}</h3><p class="mut small">${esc(S.netTxt)}</p><button class="btn" data-act="red-calles">Descargar de nuevo</button>
+    <h3>Otra localidad</h3><div class="selmuestra"><input id="zonaTxt" class="txt" placeholder="Ej.: Jarandilla de la Vera" autocomplete="off"><button class="btn" data-act="zona-buscar">Descargar</button></div>
+    ${CFG.id !== DON_BENITO.id ? '<button class="btn" data-act="zona-db">Volver a Don Benito</button>' : ''}
+    <p class="mut small">Descarga las calles de esa localidad (unos 5 km alrededor de su centro) y centra el mapa. Hace falta conexión a Internet.</p>
     <h3>Ir a una calle</h3><input id="irCalle" class="txt" list="listaCalles" placeholder="Escribe el nombre de la calle…" autocomplete="off"><datalist id="listaCalles"></datalist>`;
 }
 function vistaTrazos() {
@@ -346,6 +349,7 @@ panel.addEventListener('input', ev => {
   const e = ev.target;
   if (e.id === 'irCalle') { $('#listaCalles').innerHTML = searchStreets(e.value).map(n => `<option value="${esc(n)}">`).join(''); const b = streetBounds(e.value); if (b) map.fitBounds(b, { padding: [40, 40], maxZoom: 18 }); return; }
   if (e.dataset.base) { S.p.base = e.value; aplicarBase(); guardar(); render(); return; }
+  if (e.id === 'zonaTxt') return;
   if (e.id === 'abrev') { S.abreviar = e.checked; return; }
   if (e.dataset.lk) { const L = S.p.leyenda, oc = (L.ocultos || []).filter(x => x !== e.dataset.lk); if (!e.checked) oc.push(e.dataset.lk); L.ocultos = oc; guardar(); redibujar(); return; }
   if (!e.dataset.o) return;
@@ -369,6 +373,8 @@ const alClic = ev => {
     case 'base': S.p.base = b.dataset.b; aplicarBase(); guardar(); render(); break;
     case 'tierra-def': S.p.tierra = nuevoProyecto().tierra; guardar(); render(); redibujar(); break;
     case 'gris-def': S.p.gris = nuevoProyecto().gris; aplicarBase(); guardar(); render(); break;
+    case 'zona-buscar': { const txt = (document.getElementById('zonaTxt') || {}).value; if (txt && txt.trim()) cambiarZona(txt.trim()); else aviso('Escribe el nombre de la localidad'); break; }
+    case 'zona-db': irAZona(DON_BENITO); break;
     case 'red-calles': loadNet(true, estadoCalles).then(() => { render(); redibujar(); }); if (S.p.base === 'tierra') loadVerdes(true).then(() => redibujar()); break;
     case 'nuevo': S.dib = nuevoBorrador(); S.sel = { trazo: S.sel.trazo, label: null }; render(); redibujar(); if (!net.ready) aviso('El callejero no está cargado: trazado libre'); break;
     case 'rehacer': if (t) { S.dib = nuevoBorrador(); S.dib.rehacer = t.id; render(); redibujar(); } break;
@@ -411,6 +417,7 @@ const alClic = ev => {
     case 'nuevo-proy': if (b.dataset.ok) { S.p = nuevoProyecto(); S.sel = { trazo: null, label: null }; guardar(); aplicarBase(); render(); redibujar(); } else { b.dataset.ok = '1'; b.textContent = 'Pulsa otra vez para borrar todo'; setTimeout(() => { b.dataset.ok = ''; b.textContent = 'Plano nuevo'; }, 3000); } break;
   }
 };
+panel.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.id === 'zonaTxt' && ev.target.value.trim()) cambiarZona(ev.target.value.trim()); });
 panel.addEventListener('click', alClic); $('#tabs').addEventListener('click', alClic);
 $('#fileProy').addEventListener('change', async ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
@@ -439,6 +446,15 @@ function descargarPNG() {
 }
 
 /* ───────── Arranque ───────── */
+async function cambiarZona(txt) {
+  aviso('Buscando «' + txt + '»…');
+  try { const z = await buscarZona(txt); if (!z) { aviso('No encuentro esa localidad'); return; } irAZona(z); }
+  catch { aviso('No se pudo buscar la localidad. Comprueba la conexión.'); }
+}
+function irAZona(z) {
+  setZona(z); map.setView(z.center, 16, { animate: false }); S.netTxt = 'Callejero: descargando…'; render(); redibujar();
+  loadNet(true, estadoCalles).then(ok => { render(); redibujar(); if (ok) aviso('Callejero de ' + z.nombre + ' listo'); if (ok && S.p.base === 'tierra') loadVerdes(true).then(() => redibujar()); });
+}
 function estadoCalles(txt) { S.netTxt = txt; if (S.tab === 'plano' && !S.dib) { const e = panel.querySelector('.mut.small'); if (e && !panel.querySelector('#irCalle:focus')) render(); } }
 aplicarBase(); render(); tomarFoto(); actualizarHist();
 $('#btnUndo').onclick = deshacerProy; $('#btnRedo').onclick = rehacerProy;

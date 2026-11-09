@@ -1,16 +1,28 @@
 /* Callejero (OpenStreetMap vía Overpass), grafo, ajuste a calle, rutas y localización de tramos por nombre */
-import { lsGet, lsSet, normName, lengthM } from './util.js?v=20261108m';
+import { lsGet, lsSet, normName, lengthM } from './util.js?v=20261108n';
 
-export const CFG = {
-  center: [38.9565, -5.8612], zoom: 15,
-  bbox: [38.936, -5.884, 38.976, -5.838],      // S, O, N, E (casco urbano Don Benito–Villanueva)
-  snapMax: 70,
-};
-const NET_KEY = 'plano.callejero.v1';
-const KY = 111320, KX = 111320 * Math.cos(CFG.center[0] * Math.PI / 180);
+/* Zona de trabajo (localidad cuyo callejero se descarga). Por defecto, Don Benito; se puede cambiar desde la pestaña Plano. */
+export const DON_BENITO = { id: 'don-benito', nombre: 'Don Benito', center: [38.9565, -5.8612], bbox: [38.936, -5.884, 38.976, -5.838] };   // bbox: S, O, N, E (casco urbano Don Benito–Villanueva)
+export const CFG = { ...DON_BENITO, zoom: 15, snapMax: 70 };
+const NET_KEY = 'plano.callejero.v1', ZONA_KEY = 'plano.zona.v1';
+const KY = 111320; let KX = 111320 * Math.cos(CFG.center[0] * Math.PI / 180);
+export function setZona(z, recordar = true) {
+  Object.assign(CFG, { id: z.id, nombre: z.nombre, center: z.center, bbox: z.bbox });
+  KX = 111320 * Math.cos(CFG.center[0] * Math.PI / 180);
+  Object.assign(net, { ready: false, verdes: null, _man: null });
+  if (recordar) { if (z.id === DON_BENITO.id) { try { localStorage.removeItem(ZONA_KEY); } catch { /* sin almacenamiento */ } } else lsSet(ZONA_KEY, JSON.stringify(z)); }
+}
+/* Localiza una localidad (Nominatim) y devuelve la zona: un cuadrado de unos 5 km alrededor de su centro */
+export async function buscarZona(texto) {
+  const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=es&q=' + encodeURIComponent(texto));
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json(); if (!j.length) return null;
+  const lat = +j[0].lat, lon = +j[0].lon, dla = 0.022, dlo = 0.022 / Math.cos(lat * Math.PI / 180);
+  return { id: lat.toFixed(3) + ',' + lon.toFixed(3), nombre: String(j[0].display_name || texto).split(',')[0].trim(), center: [lat, lon], bbox: [+(lat - dla).toFixed(5), +(lon - dlo).toFixed(5), +(lat + dla).toFixed(5), +(lon + dlo).toFixed(5)] };
+}
 const xy = (lat, lon) => [(lon - CFG.center[1]) * KX, (lat - CFG.center[0]) * KY];
 
-export const net = { ready: false, adj: [], X: [], Y: [], lat: [], lon: [], ea: [], eb: [], el: [], en: [], names: [], lines: [], rl: [], nways: 0, _ni: null, _ne: null };
+export const net = { verdes: null, ready: false, adj: [], X: [], Y: [], lat: [], lon: [], ea: [], eb: [], el: [], en: [], names: [], lines: [], rl: [], nways: 0, _ni: null, _ne: null };
 
 /* Proyección Mercator normalizada (0..1) */
 export const merc = (lat, lon) => [(lon + 180) / 360, 0.5 - Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)) / (2 * Math.PI)];
@@ -101,7 +113,6 @@ async function fetchOverpass() {
 
 /* Zonas verdes (parques, jardines, césped, arbolado) para el fondo Beige: descarga aparte y caché propia */
 const VERDES_KEY = 'plano.verdes.v1';
-net.verdes = null;
 export function buildVerdes(areas) {
   net.verdes = areas.map(g => {
     const k = g.length / 2, mx = new Float64Array(k), my = new Float64Array(k); let x0 = 9, y0 = 9, x1 = -9, y1 = -9;
@@ -134,8 +145,8 @@ export function loadVerdes(force) {
   if (net.verdes && !force) return Promise.resolve(true);
   if (loadingV && !force) return loadingV;
   loadingV = (async () => {
-    if (!force) { try { const c = JSON.parse(lsGet(VERDES_KEY, 'null')); if (c && Array.isArray(c.areas)) { buildVerdes(c.areas); return true; } } catch { /* caché corrupta */ } }
-    try { const areas = await fetchVerdes(); buildVerdes(areas); lsSet(VERDES_KEY, JSON.stringify({ t: Date.now(), areas })); return true; }
+    if (!force) { try { const c = JSON.parse(lsGet(VERDES_KEY, 'null')); if (c && Array.isArray(c.areas) && (c.zona || DON_BENITO.id) === CFG.id) { buildVerdes(c.areas); return true; } } catch { /* caché corrupta */ } }
+    try { const areas = await fetchVerdes(); buildVerdes(areas); lsSet(VERDES_KEY, JSON.stringify({ t: Date.now(), zona: CFG.id, areas })); return true; }
     catch (err) { console.warn(err); return false; }
     finally { loadingV = null; }
   })();
@@ -148,12 +159,12 @@ export function loadNet(force, status = () => {}) {
   if (loading && !force) return loading;
   loading = (async () => {
     if (!force) {
-      try { const c = JSON.parse(lsGet(NET_KEY, 'null')); if (c && c.ways && c.ways.length) { buildNet(c.ways); status(`Callejero: ${c.ways.length} vías`, 'ok'); return true; } } catch { /* caché corrupta */ }
+      try { const c = JSON.parse(lsGet(NET_KEY, 'null')); if (c && c.ways && c.ways.length && (c.zona || DON_BENITO.id) === CFG.id) { buildNet(c.ways); status(`Callejero: ${c.ways.length} vías`, 'ok'); return true; } } catch { /* caché corrupta */ }
     }
     status('Callejero: descargando…', '');
     try {
       const ways = await fetchOverpass();
-      buildNet(ways); lsSet(NET_KEY, JSON.stringify({ t: Date.now(), ways }));
+      buildNet(ways); lsSet(NET_KEY, JSON.stringify({ t: Date.now(), zona: CFG.id, ways }));
       status(`Callejero: ${ways.length} vías`, 'ok'); return true;
     } catch (err) {
       console.warn(err); status('Sin callejero · trazado libre', 'bad'); return false;
@@ -248,3 +259,6 @@ export function streetBounds(name) {
   net.names.forEach((nm, i) => { if (nm !== name) return; for (let k = 0; k < net.ea.length; k++) if (net.en[k] === i) for (const v of [net.ea[k], net.eb[k]]) { s = Math.min(s, net.lat[v]); n = Math.max(n, net.lat[v]); w = Math.min(w, net.lon[v]); e = Math.max(e, net.lon[v]); } });
   return n < s ? null : [[s, w], [n, e]];
 }
+
+/* Recupera la zona elegida la última vez */
+try { const z = JSON.parse(lsGet(ZONA_KEY, 'null')); if (z && z.id && Array.isArray(z.bbox) && Array.isArray(z.center)) setZona(z, false); } catch { /* sin zona guardada */ }
