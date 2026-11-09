@@ -1,5 +1,9 @@
 # Diseñador de planos
 
+### 👉 [**Abrir la aplicación**](https://murpix56.github.io/disenador-planos/)
+
+Esta página es solo el código. La aplicación funciona en: https://murpix56.github.io/disenador-planos/
+
 Herramienta personal para preparar planos de itinerarios y cortes de calle (por ejemplo, para redes sociales).
 
 - **Fondos:** plano gris y blanco (calles dibujadas con el callejero de OpenStreetMap), plano de calles y satélite (PNOA, IGN).
