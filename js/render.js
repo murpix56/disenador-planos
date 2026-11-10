@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc, manzanas } from './net.js?v=20261108o';
+import { net, merc, manzanas } from './net.js?v=20261108p';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -173,14 +173,20 @@ function rayas(ctx, x, y, w, h, paso, c1, c2) {
 function dibujarCorte(ctx, tipo, s) {
   const u = s / 100, O = 'rgba(16,24,40,.5)'; ctx.scale(u, u); ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   if (tipo === 'agente') {
-    ctx.translate(0, 2); const AZ = '#1f3b73', PIEL = '#f1c9a5';
-    poli(ctx, [[-22, -20], [-30, -18], [-34, 12], [-25, 13]], AZ, O); disco(ctx, -30, 15, 5, PIEL, O);                 /* brazo caído */
-    poli(ctx, [[20, -22], [25, -12], [46, -27], [41, -37]], AZ, O); disco(ctx, 47, -32, 6, '#ffffff', O);                /* brazo con la mano en alto (señal de alto) */
-    rect(ctx, -14, 20, 12, 26, '#16284f', O); rect(ctx, 2, 20, 12, 26, '#16284f', O); rect(ctx, -16, 44, 15, 6, '#111827'); rect(ctx, 1, 44, 15, 6, '#111827');
-    poli(ctx, [[-22, -24], [22, -24], [24, 22], [-24, 22]], AZ, O); poli(ctx, [[-23, -6], [23, -6], [23.5, 2], [-23.5, 2]], '#f5d90a'); rect(ctx, -24, 16, 48, 6, '#111827');
-    disco(ctx, 0, -38, 11, PIEL, O);
-    ctx.beginPath(); ctx.arc(0, -41, 12.5, Math.PI, 0); ctx.closePath(); ctx.fillStyle = AZ; ctx.fill(); ctx.strokeStyle = O; ctx.stroke();
-    for (let i = 0; i < 5; i++) rect(ctx, -12.5 + i * 5, -42, 5, 5, i % 2 ? '#ffffff' : '#1d5fb5'); rect(ctx, -14, -37, 28, 3, '#111827'); disco(ctx, 0, -47, 2.4, '#f5d90a');
+    /* Agente de tráfico de frente: gorra de plato con banda de cuadros, chaleco reflectante, guantes blancos y brazo extendido (señal de alto) */
+    const AZ = '#1b3a6b', PANT = '#122a52', PIEL = '#f0c6a0', VEST = '#d4e03a', trazo = (x1, y1, x2, y2, w, c) => { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineWidth = w; ctx.strokeStyle = c; ctx.stroke(); };
+    const elipse = (x, y, rx, ry, c, borde) => { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, 7); ctx.fillStyle = c; ctx.fill(); if (borde) { ctx.lineWidth = 1.6; ctx.strokeStyle = borde; ctx.stroke(); } };
+    ctx.translate(0, 2);
+    trazo(-6.5, 10, -8, 40, 12, PANT); trazo(6.5, 10, 8, 40, 12, PANT); elipse(-9.5, 44, 9, 4.2, '#0b1220'); elipse(9.5, 44, 9, 4.2, '#0b1220');   /* piernas y zapatos */
+    trazo(-17, -19, -23, 3, 9.5, AZ); elipse(-23.5, 7.5, 4.6, 5, '#ffffff', O);                                                                     /* brazo caído con guante */
+    trazo(16, -19, 41, -23, 9.5, AZ); elipse(46, -24, 5, 6.5, '#ffffff', O); trazo(41.5, -29, 41.5, -18, 0.01, AZ);                                /* brazo extendido con la palma abierta */
+    poli(ctx, [[-17, -25], [17, -25], [20, 12], [-20, 12]], AZ, O);                                                                                  /* torso */
+    poli(ctx, [[-15, -25], [-5, -25], [0, -17], [5, -25], [15, -25], [18, 12], [-18, 12]], VEST, O);                                                   /* chaleco */
+    rect(ctx, -17.2, -8, 34.4, 4, '#eef2f7'); rect(ctx, -18, 1, 36, 4, '#eef2f7'); rect(ctx, -20, 10, 40, 5.5, '#0b1220'); rect(ctx, -2.5, 10.8, 5, 4, '#e0b43a');   /* bandas reflectantes y cinturón */
+    rect(ctx, -3.2, -30, 6.4, 7, PIEL); elipse(-8.6, -36, 2, 3, PIEL, O); elipse(8.6, -36, 2, 3, PIEL, O); elipse(0, -36.5, 8.6, 9.6, PIEL, O);        /* cuello, orejas y cabeza */
+    disco(ctx, -3.3, -36, 1.1, '#1f2937'); disco(ctx, 3.3, -36, 1.1, '#1f2937');
+    rect(ctx, -10.5, -48, 21, 8, AZ, O); elipse(0, -48, 11.5, 3.6, '#2b4f8f', O); for (let i = 0; i < 6; i++) rect(ctx, -10.5 + i * 3.5, -43, 3.5, 3.2, i % 2 ? '#ffffff' : '#1d5fb5');   /* gorra de plato con banda de cuadros */
+    poli(ctx, [[-10.5, -40], [10.5, -40], [12.5, -37.2], [-12.5, -37.2]], '#0b1220'); disco(ctx, 0, -46, 1.8, '#e0b43a');
   } else if (tipo === 'patrulla') {
     ctx.translate(0, 2);
     poli(ctx, [[-28, 2], [-15, -18], [19, -18], [32, 2]], '#ffffff', O); poli(ctx, [[-22, 0], [-13, -14], [-1, -14], [-1, 0]], '#9fc9e8'); poli(ctx, [[2, 0], [2, -14], [17, -14], [26, 0]], '#9fc9e8');

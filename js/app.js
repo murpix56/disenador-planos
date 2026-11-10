@@ -1,8 +1,8 @@
 /* Diseñador de planos · Policía Local de Don Benito (uso personal)
  * Plano gris y blanco (o calles / satélite), recorrido que sigue las calles, color, flechas y nombres a medida, y descarga en PNG. */
-import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108o';
-import { net, CFG, DON_BENITO, setZona, buscarZona, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108o';
-import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, CORTES, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108o';
+import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108p';
+import { net, CFG, DON_BENITO, setZona, buscarZona, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108p';
+import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, CORTES, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108p';
 
 /* ───────── Proyecto ───────── */
 const PROY_KEY = 'plano.proyecto.v1';
