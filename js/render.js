@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc, manzanas } from './net.js?v=20261108q';
+import { net, merc, manzanas } from './net.js?v=20261108r';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -156,11 +156,11 @@ function borrador(ctx, v, b) {
 }
 
 /* ───────── Señales ───────── */
-export const TRAFICO = { prohibido: 'Dirección prohibida', obras: 'Obras', peligro: 'Peligro', estacionar: 'Prohibido estacionar', salida: 'Salida / llegada', meta: 'Meta', obligatorio: 'Dirección obligatoria', minusvalido: 'Plaza movilidad reducida' };
+export const TRAFICO = { prohibido: 'Dirección prohibida', obras: 'Obras', peligro: 'Peligro', estacionar: 'Prohibido estacionar', salida: 'Salida / llegada', meta: 'Meta', obligatorio: 'Dirección obligatoria', minusvalido: 'Plaza movilidad reducida', stop: 'STOP', ceda: 'Ceda el paso', circprohibida: 'Circulación prohibida', limite30: 'Velocidad 30' };
 /* Puntos de referencia (dibujos): no salen en la leyenda */
-export const REFERENCIAS = { iglesia: 'Iglesia', edificio: 'Edificio', fuente: 'Fuente', futbol: 'Campo de fútbol', arco: 'Arco (sin texto)', arcosalida: 'Arco de salida', arcometa: 'Arco de meta', aparcamiento: 'Aparcamiento', parque: 'Parque / árbol' };
+export const REFERENCIAS = { iglesia: 'Iglesia', edificio: 'Edificio', fuente: 'Fuente', futbol: 'Campo de fútbol', arco: 'Arco (sin texto)', arcosalida: 'Arco de salida', arcometa: 'Arco de meta', aparcamiento: 'Aparcamiento', parque: 'Parque / árbol', ayuntamiento: 'Ayuntamiento', colegio: 'Colegio', toros: 'Plaza de toros', centrosalud: 'Centro de salud' };
 /* Objetos para cortes de calle (dibujos): agente, coche patrulla, valla, cono, raya y cinta; no salen en la leyenda */
-export const CORTES = { agente: 'Agente regulando el tráfico', agentebusto: 'Agente (icono)', patrulla: 'Coche patrulla', valla: 'Valla', cono: 'Cono', raya: 'Raya de corte', cinta: 'Cinta rojiblanca' };
+export const CORTES = { agente: 'Agente regulando el tráfico', agentebusto: 'Agente (icono)', patrulla: 'Coche patrulla', valla: 'Valla', cono: 'Cono', raya: 'Raya de corte', cinta: 'Cinta rojiblanca', moto: 'Moto de policía', ambulancia: 'Ambulancia', cartel: 'Cartel calle cortada', desvio: 'Panel de desvío' };
 export const SENALES = { ...TRAFICO, ...REFERENCIAS, ...CORTES };
 const poli = (ctx, pts, fill, borde) => { ctx.beginPath(); pts.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.closePath(); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (borde) { ctx.strokeStyle = borde; ctx.stroke(); } };
 const rect = (ctx, x, y, w, h, fill, borde) => poli(ctx, [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], fill, borde);
@@ -215,6 +215,24 @@ function dibujarCorte(ctx, tipo, s) {
   } else if (tipo === 'cono') {
     ctx.translate(0, 2); rect(ctx, -30, 34, 60, 9, '#374151', O); poli(ctx, [[-5, -44], [5, -44], [23, 34], [-23, 34]], '#f97316', O);
     const hw = y => 5 + (y + 44) / 78 * 18; for (const [a, b] of [[-18, -6], [8, 22]]) poli(ctx, [[-hw(a), a], [hw(a), a], [hw(b), b], [-hw(b), b]], '#ffffff');
+  } else if (tipo === 'moto') {
+    ctx.translate(0, 2);
+    rect(ctx, -44, -14, 26, 22, '#ffffff', O); rect(ctx, -40, -20, 8, 6, '#1d5fb5', O); rect(ctx, -31, -20, 8, 6, '#d92d20', O); rect(ctx, -44, -4, 26, 4, '#1d5fb5');
+    ctx.strokeStyle = '#374151'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(24, 2); ctx.lineTo(33, 26); ctx.stroke(); ctx.beginPath(); ctx.moveTo(18, -12); ctx.lineTo(27, -14); ctx.stroke();
+    poli(ctx, [[-18, 8], [-6, 0], [10, -4], [24, 2], [28, 14], [20, 24], [-14, 24]], '#ffffff', O); rect(ctx, -16, 14, 38, 4.5, '#1d5fb5'); rect(ctx, -14, -1, 22, 5, '#1f2937');
+    poli(ctx, [[14, -4], [24, -4], [19, -22]], '#9fc9e8', O); disco(ctx, 29, 6, 3.6, '#f5d90a', O);
+    for (const x of [-30, 33]) { disco(ctx, x, 27, 12, '#111827'); disco(ctx, x, 27, 5, '#9ca3af'); }
+  } else if (tipo === 'ambulancia') {
+    ctx.translate(0, 2); rr(ctx, -48, -16, 70, 40, 5); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.strokeStyle = O; ctx.stroke(); poli(ctx, [[22, -16], [34, -16], [48, 4], [48, 24], [22, 24]], '#ffffff', O); poli(ctx, [[28, -11], [34, -11], [43, 3], [28, 3]], '#9fc9e8');
+    rect(ctx, -46, 10, 92, 5, '#f97316'); rect(ctx, -10, -22, 7, 6, '#1d5fb5', O); rect(ctx, -3, -22, 7, 6, '#d92d20', O);
+    ctx.strokeStyle = '#1d5fb5'; ctx.lineWidth = 4; for (let i = 0; i < 3; i++) { const a = i * Math.PI / 3; ctx.beginPath(); ctx.moveTo(-26 + Math.cos(a) * 10, -4 + Math.sin(a) * 10); ctx.lineTo(-26 - Math.cos(a) * 10, -4 - Math.sin(a) * 10); ctx.stroke(); }
+    for (const x of [-28, 32]) { disco(ctx, x, 27, 9, '#111827'); disco(ctx, x, 27, 4, '#9ca3af'); }
+  } else if (tipo === 'cartel') {
+    rr(ctx, -46, -26, 92, 52, 6); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = '#d92d20'; ctx.stroke();
+    ctx.fillStyle = '#d92d20'; ctx.font = `800 17px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('CALLE', 0, -8); ctx.font = `800 15.5px ${FUENTE}`; ctx.fillText('CORTADA', 0, 10);
+  } else if (tipo === 'desvio') {
+    rr(ctx, -46, -24, 92, 48, 5); ctx.fillStyle = '#f7931e'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#101828'; ctx.stroke();
+    poli(ctx, [[-32, -6], [8, -6], [8, -16], [34, 0], [8, 16], [8, 6], [-32, 6]], '#101828');
   } else if (tipo === 'raya') {
     rr(ctx, -50, -7, 100, 14, 7); ctx.fillStyle = '#d92d20'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#ffffff'; ctx.stroke();
   } else if (tipo === 'cinta') {
@@ -260,6 +278,20 @@ function dibujarRef(ctx, tipo, s) {
   } else if (tipo === 'aparcamiento') {
     rr(ctx, -38, -38, 76, 76, 12); ctx.fillStyle = '#1d5fb5'; ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = '#ffffff'; ctx.stroke();
     ctx.fillStyle = '#ffffff'; ctx.font = `800 60px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('P', 0, 4);
+  } else if (tipo === 'ayuntamiento') {
+    ctx.translate(0, 8); rect(ctx, -38, -6, 76, 44, '#e9d8bf', O); poli(ctx, [[-43, -6], [0, -30], [43, -6]], '#c9a27c', O); disco(ctx, 0, -15, 5.5, '#ffffff', O);
+    for (const x of [-28, -13, 8, 23]) rect(ctx, x, -3, 5, 38, '#f7f0e2', O); rect(ctx, -6, 18, 12, 20, '#6b4a3a', O); rect(ctx, -44, 38, 88, 4, SUELO);
+    ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(0, -52); ctx.strokeStyle = '#475467'; ctx.stroke(); rect(ctx, 0, -52, 15, 2.8, '#c60b1e'); rect(ctx, 0, -49.2, 15, 5.6, '#ffc400'); rect(ctx, 0, -43.6, 15, 2.8, '#c60b1e');
+  } else if (tipo === 'colegio') {
+    ctx.translate(0, 6); rect(ctx, -40, -8, 80, 46, '#d98c5f', O); rect(ctx, -45, -14, 90, 7, '#8b3a2b', O); rect(ctx, -9, -30, 18, 16, '#d98c5f', O); poli(ctx, [[-12, -30], [0, -42], [12, -30]], '#8b3a2b', O); disco(ctx, 0, -22, 4, '#f4bd3a', O);
+    for (const x of [-32, -20, 8, 20]) { rect(ctx, x, -2, 10, 12, '#fff3c4', '#8b3a2b'); rect(ctx, x, 18, 10, 12, '#fff3c4', '#8b3a2b'); } rect(ctx, -6, 18, 12, 20, '#6b4a3a', O); rect(ctx, -46, 38, 92, 4, SUELO);
+  } else if (tipo === 'toros') {
+    disco(ctx, 0, 0, 44, '#d8a368', O); disco(ctx, 0, 0, 35, '#c26a3d', O); disco(ctx, 0, 0, 28, '#ecd08a', O);
+    for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; disco(ctx, Math.cos(a) * 39.5, Math.sin(a) * 39.5, 2.6, '#5b3a22'); }
+    ctx.beginPath(); ctx.arc(0, 0, 14, 0, 7); ctx.strokeStyle = 'rgba(120,80,30,.45)'; ctx.stroke();
+  } else if (tipo === 'centrosalud') {
+    ctx.translate(0, 6); rect(ctx, -38, -22, 76, 60, '#f1f5f9', O); rect(ctx, -42, -28, 84, 8, '#94a3b8', O); disco(ctx, 0, -2, 17, '#ffffff', O); rect(ctx, -4.5, -14, 9, 24, '#16a34a'); rect(ctx, -12, -6.5, 24, 9, '#16a34a');
+    for (const x of [-30, 20]) { rect(ctx, x, -14, 10, 12, '#9fc9e8', O); rect(ctx, x, 12, 10, 12, '#9fc9e8', O); } rect(ctx, -6, 20, 12, 18, '#6b7f95', O); rect(ctx, -44, 38, 88, 4, SUELO);
   } else if (tipo === 'parque') {
     ctx.translate(0, 4); rect(ctx, -5, 8, 10, 32, '#8a5a3c', O);
     disco(ctx, -18, 0, 19, '#3f9d4a', O); disco(ctx, 18, 0, 19, '#3f9d4a', O); disco(ctx, 0, -18, 25, '#4cae58', O); disco(ctx, -8, -24, 8, '#66c274');
@@ -284,6 +316,15 @@ export function dibujarSenal(ctx, tipo, x, y, s, k = 1, rot = 0) {
     ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); sombra(ctx, k); ctx.fillStyle = '#1d5fb5'; ctx.fill(); sinSombra(ctx);
     ctx.lineWidth = s * 0.05; ctx.strokeStyle = '#fff'; ctx.stroke();
     ctx.beginPath(); [[-0.07, 0.3], [0.07, 0.3], [0.07, 0.02], [0.2, 0.02], [0, -0.3], [-0.2, 0.02], [-0.07, 0.02]].forEach((q, i) => (i ? ctx.lineTo(q[0] * s, q[1] * s) : ctx.moveTo(q[0] * s, q[1] * s))); ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill();
+  } else if (tipo === 'stop') {
+    const oct = q => { ctx.beginPath(); for (let i = 0; i < 8; i++) { const a = Math.PI / 8 + i * Math.PI / 4, x = Math.cos(a) * q, y = Math.sin(a) * q; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); } ctx.closePath(); };
+    oct(r * 1.08); sombra(ctx, k); ctx.fillStyle = '#fff'; ctx.fill(); sinSombra(ctx); oct(r * 0.97); ctx.fillStyle = '#d92d20'; ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = `800 ${s * 0.32}px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('STOP', 0, s * 0.02);
+  } else if (tipo === 'ceda') {
+    ctx.beginPath(); ctx.moveTo(0, s * 0.4); ctx.lineTo(s * 0.46, -s * 0.38); ctx.lineTo(-s * 0.46, -s * 0.38); ctx.closePath(); sombra(ctx, k); ctx.fillStyle = '#fff'; ctx.fill(); sinSombra(ctx); ctx.lineWidth = s * 0.12; ctx.strokeStyle = '#d92d20'; ctx.stroke();
+  } else if (tipo === 'circprohibida' || tipo === 'limite30') {
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); sombra(ctx, k); ctx.fillStyle = '#fff'; ctx.fill(); sinSombra(ctx); ctx.beginPath(); ctx.arc(0, 0, r - s * 0.075, 0, 7); ctx.lineWidth = s * 0.15; ctx.strokeStyle = '#d92d20'; ctx.stroke();
+    if (tipo === 'limite30') { ctx.fillStyle = '#101828'; ctx.font = `800 ${s * 0.44}px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('30', 0, s * 0.02); }
   } else if (tipo === 'minusvalido') {
     const u = s / 100; rr(ctx, -r, -r, s, s, s * 0.12); sombra(ctx, k); ctx.fillStyle = '#1d5fb5'; ctx.fill(); sinSombra(ctx); ctx.lineWidth = s * 0.045; ctx.strokeStyle = '#fff'; ctx.stroke();
     ctx.save(); ctx.scale(u, u); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#fff'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
