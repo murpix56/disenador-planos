@@ -9,6 +9,7 @@ Herramienta **personal** (de un subinspector de la Policía Local de Don Benito)
 
 ## Qué hace (estado actual)
 - Fondos (desplegable): **Gris y blanco** (calles dibujadas con el callejero OSM, anchura según tipo de vía; colores configurables), **Beige / tonos tierra** (fijo, dibujado en el lienzo con el mismo callejero: fondo crema, «manzanas» en arena sólido = cada espacio cerrado entre calles (`manzanas()` en net.js: caras del grafo, se descartan la exterior y las de más de 12 ha) más un trazo ancho bajo las calles por si algún bloque queda abierto, todas las vías blancas (las principales, más anchas, ya no son amarillas); se exporta a PNG; zonas verdes (parques, jardines, césped, arbolado: `loadVerdes` en net.js, descarga aparte, caché `plano.verdes.v1`, solo `way` cerrados, sin relaciones multipolígono); sin polígonos de edificios ni agua), **Calles** (OSM) y **Satélite** (PNOA/IGN). Grosor de calles y mostrar/ocultar zonas verdes en el Beige (`p.tierra.ancho`, `p.tierra.verdes`). Exportar PNG: gris y beige.
+- **Proporción con el zoom** (`p.escala = {on, zref, gamma}`, `factorEscalaZoom` en render.js): líneas, flechas, nombres, señales y cuadros se escalan con el zoom (2^((z−zref)·gamma)) respecto al zoom de referencia, que se fija al crear el primer elemento; lo nuevo se crea con tamaño visible normal (`aEsc` en app.js); «Usar el zoom actual como referencia» (`fijarReferencia`) recalcula los tamaños guardados para que no cambie lo que se ve. La leyenda y el fondo no se escalan. Se puede desactivar. Prueba: `pruebas/plano5.js`.
 - **Otra localidad**: pestaña Plano → «Otra localidad»: busca el nombre (Nominatim), descarga ~5 km alrededor de su centro (`setZona`/`buscarZona` en net.js; zona recordada en `plano.zona.v1`; las cachés de callejero y zonas verdes llevan el id de zona y solo guardan la última) y centra el mapa. Botón «Volver a Don Benito». Los planos guardados no cambian de zona solos.
 - **Trazo que sigue las calles**: puntos de inicio, final e intermedios → ruta por el grafo (Dijkstra). «Libre» y «Levantar el lápiz» (varios tramos). Se quitan rebotes si se marca pasado el cruce.
 - **Estilos rápidos** al dibujar: Itinerario (verde, flechas, punto de salida y meta), Corte (rojo, señal de dirección prohibida en los dos extremos), Desvío (discontinuo, flechas). Cambiables luego.
@@ -21,7 +22,7 @@ Herramienta **personal** (de un subinspector de la Policía Local de Don Benito)
 - Flechas de **doble sentido** (`flechas.doble`: flecha con dos puntas; la leyenda pone «Doble sentido»).
 - **Puntos de referencia** (dibujos, `dibujarRef` en render.js; no salen en la leyenda): iglesia, edificio, fuente, campo de fútbol, arco liso verde (sin texto), arco de salida y de meta, aparcamiento, parque/árbol.
 - Pestaña Señales: **desplegable de categoría** (`CATS` en app.js: Señales de tráfico, Puntos de referencia, Cortes de calle) y debajo sus objetos. **Cortes de calle** (`CORTES`, `dibujarCorte` en render.js; no salen en la leyenda): agente regulando el tráfico (cuerpo entero), agente (icono de busto), coche patrulla, valla, cono, raya de corte y cinta rojiblanca (la raya y la cinta se orientan y alargan con giro y tamaño).
-- Más objetos: tráfico (STOP, ceda el paso, circulación prohibida, velocidad 30), referencia (ayuntamiento, colegio, plaza de toros, centro de salud), cortes (moto de policía, ambulancia, cartel «calle cortada», panel de desvío).
+- Más objetos: tráfico (STOP, ceda el paso, circulación prohibida, velocidad 20/30/40/50/60), referencia (ayuntamiento, colegio, plaza de toros, centro de salud), cortes (moto de policía, ambulancia, cartel «calle cortada», panel de desvío).
 - Señal de «plaza de movilidad reducida» (silla de ruedas, `minusvalido`). Selector de fondo con cuadrito de muestra.
 - Señal de «dirección obligatoria» (flecha blanca en círculo azul; se orienta con el giro).
 - Señales con giro (`marca.rot`, deslizador y botones de 90°).
@@ -50,7 +51,6 @@ Herramienta **personal** (de un subinspector de la Policía Local de Don Benito)
 Repositorio y página públicos (GitHub Free). La página lleva `noindex, nofollow, noarchive` para que los buscadores no la indexen; no hay datos sensibles (los planos se guardan en el navegador del usuario). Hacerlo privado despublicaría Pages (ver conversación del 2026-11-08).
 
 ## Pendiente / ideas (no pedidas aún)
-- **Escala general** (un deslizador que escale a la vez nombres, señales, flechas y leyenda): al alejar el plano tras ajustarlo de cerca, los tamaños no se mantienen proporcionales. El usuario lo ve «interesante, no imprescindible»; retomar si lo echa en falta.
 - Exportar también con satélite / plano de calles (teselas con CORS; hay que dibujarlas en el canvas de exportación).
 - Más señales; seleccionar varios elementos; alinear.
 - Plantilla de cartel completo (cabecera, caja de información, pie) o marco con escudo.

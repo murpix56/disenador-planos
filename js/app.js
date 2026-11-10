@@ -1,22 +1,22 @@
 /* Diseñador de planos · Policía Local de Don Benito (uso personal)
  * Plano gris y blanco (o calles / satélite), recorrido que sigue las calles, color, flechas y nombres a medida, y descarga en PNG. */
-import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108r';
-import { net, CFG, DON_BENITO, setZona, buscarZona, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108r';
-import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, CORTES, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108r';
+import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108s';
+import { net, CFG, DON_BENITO, setZona, buscarZona, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108s';
+import { filasLeyenda, factorEscalaZoom, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, CORTES, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108s';
 
 /* ───────── Proyecto ───────── */
 const PROY_KEY = 'plano.proyecto.v1';
 const PALETA = ['#16a34a', '#d92d20', '#f79009', '#1d5fb5', '#7a5af8', '#101828'];
 const FORMATOS = [['1080x1080', 'Cuadrado 1080×1080'], ['1080x1350', 'Vertical 1080×1350'], ['1200x630', 'Horizontal 1200×630'], ['2160x2160', 'Cuadrado HD 2160×2160']];
 const LEY_DEF = { on: false, esq: 'bi', ocultos: ['s:salida', 's:meta'], tam: 15, borde: '#d92d20', fondo: '#ffffff', color: '#101828' };
-const nuevoProyecto = () => ({ nombre: 'Plano sin título', base: 'gris', gris: { fondo: '#e6e6e6', calle: '#ffffff', ancho: 1 }, tierra: { ancho: 1, verdes: true }, trazos: [], marcas: [], notas: [], leyenda: { ...LEY_DEF } });
+const nuevoProyecto = () => ({ nombre: 'Plano sin título', base: 'gris', gris: { fondo: '#e6e6e6', calle: '#ffffff', ancho: 1 }, tierra: { ancho: 1, verdes: true }, escala: { on: true, zref: null, gamma: 1 }, trazos: [], marcas: [], notas: [], leyenda: { ...LEY_DEF } });
 const nuevaMarca = (tipo, lat, lon) => ({ id: uid(), tipo, lat, lon, tam: 40, rot: 0, texto: '', ttam: 13, color: '#1d5fb5', halo: '#ffffff', mayus: true });
 const nuevaNota = (lat, lon) => ({ id: uid(), texto: 'TEXTO', lat, lon, ancla: null, tam: 16, color: '#1d5fb5', fondo: '#ffffff', borde: '#1d5fb5', bw: 3, mayus: true });
 const nuevoTrazo = n => ({ id: uid(), nombre: 'Trazo ' + n, color: '#16a34a', ancho: 7, borde: true, discontinuo: false, visible: true, flechas: { on: true, color: '#1d5fb5', tam: 20, sep: 220 }, segs: [], etiquetas: [] });
 const nuevaEtiqueta = (texto, lat, lon) => ({ id: uid(), texto, lat, lon, giro: 0, visible: true, ...ESTILO_CARTEL });
 function normalizar(j) {
   const d = nuevoProyecto(), base = nuevoTrazo(1);
-  return { ...d, ...j, gris: { ...d.gris, ...(j.gris || {}) }, tierra: { ...d.tierra, ...(j.tierra || {}) }, leyenda: { ...LEY_DEF, ...(j.leyenda || {}) }, marcas: (j.marcas || []).map(m => ({ ...nuevaMarca('prohibido', 0, 0), ...m })), notas: (j.notas || []).map(n => ({ ...nuevaNota(0, 0), ...n })), trazos: (j.trazos || []).map(t => ({ ...base, ...t, flechas: { ...base.flechas, ...(t.flechas || {}) }, etiquetas: (t.etiquetas || []).map(l => ({ ...nuevaEtiqueta('', 0, 0), ...l })) })) };
+  return { ...d, ...j, gris: { ...d.gris, ...(j.gris || {}) }, tierra: { ...d.tierra, ...(j.tierra || {}) }, escala: { ...d.escala, ...(j.escala || {}) }, leyenda: { ...LEY_DEF, ...(j.leyenda || {}) }, marcas: (j.marcas || []).map(m => ({ ...nuevaMarca('prohibido', 0, 0), ...m })), notas: (j.notas || []).map(n => ({ ...nuevaNota(0, 0), ...n })), trazos: (j.trazos || []).map(t => ({ ...base, ...t, flechas: { ...base.flechas, ...(t.flechas || {}) }, etiquetas: (t.etiquetas || []).map(l => ({ ...nuevaEtiqueta('', 0, 0), ...l })) })) };
 }
 function cargar() { try { const j = JSON.parse(lsGet(PROY_KEY, 'null')); if (j && Array.isArray(j.trazos)) return normalizar(j); } catch { /* proyecto dañado */ } return nuevoProyecto(); }
 const hist = { pila: [], pos: -1, ult: '' };
@@ -76,7 +76,20 @@ try { const v = JSON.parse(lsGet('plano.vista.v1', 'null')); if (v && isFinite(v
 const cont = map.getContainer(), lienzo = document.createElement('canvas'); lienzo.className = 'capa'; cont.appendChild(lienzo);
 let raf = 0, hits = { labels: [], trazos: [] };
 const redibujar = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; pintar(); }); };
+const r1 = x => Math.round(x * 10) / 10, fesc = () => factorEscalaZoom(S.p, map.getZoom());
+/* Lo que se crea nuevo debe verse con su tamaño normal aunque el zoom sea distinto del de referencia */
+function aEsc(o, campos) { const f = fesc(); if (f !== 1) campos.forEach(c => { if (o[c] != null) o[c] = r1(o[c] / f); }); return o; }
+function fijarReferencia() {
+  const e = S.p.escala, z = map.getZoom(), f = fesc();
+  if (Math.abs(f - 1) > 1e-6) {
+    for (const t of S.p.trazos) { t.ancho = r1(t.ancho * f); t.flechas.tam = r1(t.flechas.tam * f); t.flechas.sep = Math.round(t.flechas.sep * f); for (const l of t.etiquetas) l.tam = r1(l.tam * f); }
+    for (const m of S.p.marcas) { m.tam = r1(m.tam * f); m.ttam = r1(m.ttam * f); }
+    for (const n of S.p.notas) { n.tam = r1(n.tam * f); n.bw = r1(n.bw * f); }
+  }
+  e.zref = z; guardar(); render(); redibujar(); aviso('Zoom de referencia fijado en ' + z.toFixed(1));
+}
 function pintar() {
+  if (S.p.escala && S.p.escala.zref == null && (S.p.trazos.length || S.p.marcas.length || S.p.notas.length)) { S.p.escala.zref = map.getZoom(); guardar(); }   /* la referencia es el zoom al que se hace el primer elemento */
   const sz = map.getSize(), dpr = window.devicePixelRatio || 1;
   if (lienzo.width !== Math.round(sz.x * dpr) || lienzo.height !== Math.round(sz.y * dpr)) { lienzo.width = Math.round(sz.x * dpr); lienzo.height = Math.round(sz.y * dpr); lienzo.style.width = sz.x + 'px'; lienzo.style.height = sz.y + 'px'; }
   const ctx = lienzo.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -146,8 +159,8 @@ function marcasAuto(t, k) {
 function terminarDibujo() {
   const d = S.dib; cerrarTramo(d);
   if (!d.segs.length) { aviso('Marca al menos dos puntos'); return; }
-  const t = nuevoTrazo(S.p.trazos.length + 1); t.segs = d.segs.map(s => s.path); t.etiquetas = etiquetasDe(d.segs.flatMap(s => s.tramos));
-  if (!d.rehacer) { aplicarPreset(t, S.preset); const n = S.p.trazos.filter(x => x.nombre.startsWith(PRESETS[S.preset].nombre)).length; t.nombre = PRESETS[S.preset].nombre + (n ? ' ' + (n + 1) : ''); if (S.autoMarcas) S.p.marcas.push(...marcasAuto(t, S.preset)); }
+  const t = nuevoTrazo(S.p.trazos.length + 1); t.segs = d.segs.map(s => s.path); t.etiquetas = etiquetasDe(d.segs.flatMap(s => s.tramos)); t.etiquetas.forEach(l => aEsc(l, ['tam']));
+  if (!d.rehacer) { aplicarPreset(t, S.preset); aEsc(t, ['ancho']); aEsc(t.flechas, ['tam', 'sep']); const n = S.p.trazos.filter(x => x.nombre.startsWith(PRESETS[S.preset].nombre)).length; t.nombre = PRESETS[S.preset].nombre + (n ? ' ' + (n + 1) : ''); if (S.autoMarcas) S.p.marcas.push(...marcasAuto(t, S.preset).map(m => aEsc(m, ['tam']))); }
   if (d.rehacer) { const o = S.p.trazos.find(x => x.id === d.rehacer); if (o) { o.segs = t.segs; o.etiquetas = t.etiquetas; S.dib = null; S.sel = { trazo: o.id, label: null }; guardar(); render(); redibujar(); return; } }
   S.p.trazos.push(t); S.dib = null; S.hover = null; S.sel = { ...selVacio(), trazo: t.id }; guardar(); render(); redibujar();
   aviso(t.etiquetas.length ? `Trazo creado con ${t.etiquetas.length} nombres de calle. Ajústalos en «Nombres».` : 'Trazo creado.');
@@ -162,10 +175,10 @@ const fijarSel = el => {
 };
 function colocarAqui(ll) {
   const c = S.colocar; S.colocar = c.k === 'sinflecha' ? c : null;
-  if (c.k === 'label') { const t = selTrazoObj(); if (!t) return; const l = nuevaEtiqueta('NOMBRE', ll.lat, ll.lng); t.etiquetas.push(l); S.sel = { ...S.sel, label: l.id }; }
-  else if (c.k === 'marca') { const m = nuevaMarca(c.tipo, ll.lat, ll.lng); m.tam = REFERENCIAS[c.tipo] ? 64 : ({ agente: 76, agentebusto: 52, moto: 70, ambulancia: 84, cartel: 80, desvio: 70, patrulla: 84, valla: 64, cono: 44, raya: 90, cinta: 90 })[c.tipo] || m.tam; S.p.marcas.push(m); S.sel = { ...selVacio(), marca: m.id }; }
+  if (c.k === 'label') { const t = selTrazoObj(); if (!t) return; const l = aEsc(nuevaEtiqueta('NOMBRE', ll.lat, ll.lng), ['tam']); t.etiquetas.push(l); S.sel = { ...S.sel, label: l.id }; }
+  else if (c.k === 'marca') { const m = nuevaMarca(c.tipo, ll.lat, ll.lng); m.tam = REFERENCIAS[c.tipo] ? 64 : ({ agente: 76, agentebusto: 52, moto: 70, ambulancia: 84, cartel: 80, desvio: 70, patrulla: 84, valla: 64, cono: 44, raya: 90, cinta: 90 })[c.tipo] || m.tam; aEsc(m, ['tam', 'ttam']); S.p.marcas.push(m); S.sel = { ...selVacio(), marca: m.id }; }
   else if (c.k === 'sinflecha') { const t = selTrazoObj(); if (!t) return; t.flechas.sin = [...(t.flechas.sin || []), { lat: ll.lat, lon: ll.lng, r: S.radioZona }]; }
-  else if (c.k === 'nota') { const n = nuevaNota(ll.lat, ll.lng); S.p.notas.push(n); S.sel = { ...selVacio(), nota: n.id }; }
+  else if (c.k === 'nota') { const n = aEsc(nuevaNota(ll.lat, ll.lng), ['tam', 'bw']); S.p.notas.push(n); S.sel = { ...selVacio(), nota: n.id }; }
   guardar(); render(); redibujar();
 }
 map.on('click', ev => {
@@ -249,6 +262,8 @@ function vistaPlano() {
   return `<h3>Fondo del plano</h3>
     <div class="selmuestra"><select class="txt" data-base="1" aria-label="Fondo del plano">${B.map(([k, l]) => `<option value="${k}"${S.p.base === k ? ' selected' : ''}>${l}</option>`).join('')}</select><span id="muestraBase" class="muestra" style="${estiloMuestra()}" title="Muestra del fondo elegido"></span></div>
     ${S.p.base === 'gris' ? `<div class="card grp">${cl('g', 'fondo', 'Color del fondo', g.fondo)}${cl('g', 'calle', 'Color de las calles', g.calle)}${rg('g', 'ancho', 'Grosor de las calles', 0.5, 2, 0.05, g.ancho)}<button class="btn" data-act="gris-def">Restablecer colores</button></div>` : `${S.p.base === 'tierra' ? `<div class="card grp">${rg('ti', 'ancho', 'Grosor de las calles', 0.5, 2, 0.05, S.p.tierra.ancho)}${ck('ti', 'verdes', 'Mostrar zonas verdes', S.p.tierra.verdes !== false)}<button class="btn" data-act="tierra-def">Restablecer ajustes</button></div>` : ''}<p class="mut small">${S.p.base === 'tierra' ? 'Colores fijos (fondo crema, manzanas en arena, calles blancas y zonas verdes de OpenStreetMap: parques, jardines y césped). También sale en la imagen descargada.' : 'La descarga de imagen solo está disponible con los fondos «Gris y blanco» y «Beige». Con calles o satélite, usa la captura de pantalla.'}</p>`}
+    <h3>Proporción al hacer zoom</h3><div class="card">${ck('es', 'on', 'Mantener la proporción al acercar o alejar', S.p.escala.on)}
+      ${S.p.escala.on ? `${rg('es', 'gamma', 'Ajuste', 0, 1, 0.05, S.p.escala.gamma)}<p class="mut small">Referencia: zoom ${S.p.escala.zref == null ? '—' : (+S.p.escala.zref).toFixed(1)}. Líneas, flechas, nombres, señales y cuadros crecen o se encogen con el zoom como si fueran parte del mapa. Los deslizadores de tamaño se refieren al zoom de referencia. Cuando te guste cómo queda a este zoom, pulsa el botón y ese pasa a ser el de referencia, sin cambiar lo que ves.</p><button class="btn" data-act="esc-ref">Usar el zoom actual como referencia</button>` : '<p class="mut small">Desactivado: los tamaños no cambian con el zoom.</p>'}</div>
     <h3>Callejero de ${esc(CFG.nombre)}</h3><p class="mut small">${esc(S.netTxt)}</p><button class="btn" data-act="red-calles">Descargar de nuevo</button>
     <h3>Otra localidad</h3><div class="selmuestra"><input id="zonaTxt" class="txt" placeholder="Ej.: Jarandilla de la Vera" autocomplete="off"><button class="btn" data-act="zona-buscar">Descargar</button></div>
     ${CFG.id !== DON_BENITO.id ? '<button class="btn" data-act="zona-db">Volver a Don Benito</button>' : ''}
@@ -263,11 +278,11 @@ function vistaTrazos() {
       <label class="txtl"><span>Nombre</span><input class="txt" value="${esc(t.nombre)}" data-o="t" data-k="nombre" data-ty="s" data-re="1"></label>
       <div class="lbl">Estilo rápido</div><div class="seg">${Object.entries(PRESETS).map(([k, p]) => `<button data-act="preset-t" data-p="${k}">${p.nombre}</button>`).join('')}</div>
       <div class="lbl">Color</div>${swatches('t', 'color', t.color)}${cl('t', 'color', 'Otro color', t.color)}
-      ${rg('t', 'ancho', 'Grosor', 2, 26, 1, t.ancho)}
+      ${rg('t', 'ancho', 'Grosor', 1, 40, 1, t.ancho)}
       <div class="dos">${ck('t', 'borde', 'Borde blanco', t.borde !== false)}${ck('t', 'discontinuo', 'Discontinuo', t.discontinuo)}</div>
       <h3>Flechas de sentido</h3>${ck('fl', 'on', 'Mostrar flechas', t.flechas.on)}
       ${t.flechas.on ? ck('fl', 'doble', 'Doble sentido (flecha con dos puntas)', t.flechas.doble) : ''}
-      ${t.flechas.on ? `${cl('fl', 'color', 'Color de la flecha', t.flechas.color)}${rg('fl', 'tam', 'Tamaño', 8, 44, 1, t.flechas.tam)}${rg('fl', 'sep', 'Separación', 80, 520, 10, t.flechas.sep)}
+      ${t.flechas.on ? `${cl('fl', 'color', 'Color de la flecha', t.flechas.color)}${rg('fl', 'tam', 'Tamaño', 4, 80, 1, t.flechas.tam)}${rg('fl', 'sep', 'Separación', 40, 1000, 10, t.flechas.sep)}
         <div class="lbl">Quitar flechas de una zona</div>${rg('au', 'radioZona', 'Radio (m)', 5, 100, 5, S.radioZona)}
         <button class="btn${S.colocar && S.colocar.k === 'sinflecha' ? ' pri' : ''}" data-act="sinflecha">${S.colocar && S.colocar.k === 'sinflecha' ? 'Terminar' : '✕ Marcar zona en el mapa'}</button>
         ${S.colocar && S.colocar.k === 'sinflecha' ? '<div class="hint">Pulsa en el mapa sobre la glorieta o el punto donde sobran flechas. Puedes marcar varias.</div>' : ''}
@@ -292,7 +307,7 @@ function vistaNombres() {
     ${S.colocar ? '<div class="hint">Pulsa en el mapa donde quieras el nombre.</div>' : ''}
     ${t.etiquetas.length ? `<div class="lista">${t.etiquetas.map(x => `<div class="fila${x.id === S.sel.label ? ' on' : ''}"><label class="vis"><input type="checkbox" ${x.visible !== false ? 'checked' : ''} data-o="lab" data-id="${x.id}" data-k="visible" data-ty="b" title="Mostrar u ocultar"></label><input class="txt" value="${esc(x.texto)}" data-o="lab" data-id="${x.id}" data-k="texto" data-ty="s" data-foco="${x.id}"><button class="ico" data-act="sell" data-id="${x.id}" title="Editar estilo">✎</button></div>`).join('')}</div>` : '<p class="vacio">Este trazo no tiene nombres. Añade uno o vuelve a dibujarlo siguiendo calles.</p>'}
     ${l ? `<h3>Estilo del nombre</h3><div class="card">
-      ${rg('lab', 'tam', 'Tamaño', 8, 40, 1, l.tam, l.id)}${cl('lab', 'color', 'Color del texto', l.color, l.id)}${cl('lab', 'halo', 'Color del borde', l.halo, l.id)}
+      ${rg('lab', 'tam', 'Tamaño', 4, 60, 1, l.tam, l.id)}${cl('lab', 'color', 'Color del texto', l.color, l.id)}${cl('lab', 'halo', 'Color del borde', l.halo, l.id)}
       ${rg('lab', 'giro', 'Giro (°)', -90, 90, 1, l.giro, l.id)}
       <div class="dos">${ck('lab', 'negrita', 'Negrita', l.negrita, l.id)}${ck('lab', 'mayus', 'MAYÚSCULAS', l.mayus, l.id)}</div></div>
       <div class="btns"><button class="btn" data-act="estilo-todos">Usar en todos</button><button class="btn dng" data-act="quitar-et" data-id="${l.id}">Quitar</button></div>` : ''}
@@ -311,8 +326,8 @@ function vistaSenales() {
     <div class="pal">${Object.entries(cat.items).map(([k, l]) => `<button class="pb${col && col.tipo === k ? ' on' : ''}" data-act="poner" data-tipo="${k}"><img src="${icono(k)}" alt="" width="44" height="44"><span>${l}</span></button>`).join('')}</div>
     ${col && col.k === 'marca' ? `<div class="hint">Pulsa en el mapa donde quieras la señal de «${SENALES[col.tipo]}».</div>` : ''}
     <h3>Cuadro de texto</h3><button class="btn" data-act="poner-nota">＋ Añadir cuadro de texto</button>${col && col.k === 'nota' ? '<div class="hint">Pulsa en el mapa donde quieras el cuadro.</div>' : ''}
-    ${m ? `<h3>Señal seleccionada</h3><div class="card">${rg('ma', 'tam', 'Tamaño', 20, 120, 2, m.tam)}${rg('ma', 'rot', 'Giro (°)', -180, 180, 5, m.rot || 0)}<div class="btns"><button class="btn" data-act="giro" data-g="-90">⟲ 90°</button><button class="btn" data-act="giro" data-g="90">⟳ 90°</button><button class="btn" data-act="giro" data-g="0">Recto</button></div><label class="txtl"><span>Texto debajo (opcional)</span><input class="txt" value="${esc(m.texto)}" data-o="ma" data-k="texto" data-ty="s" placeholder="Ej.: C/ San Francisco"></label>${m.texto ? `${rg('ma', 'ttam', 'Tamaño del texto', 8, 30, 1, m.ttam)}${cl('ma', 'color', 'Color del texto', m.color)}` : ''}</div><div class="btns"><button class="btn dng" data-act="quitar-sel">Quitar señal</button></div>` : ''}
-    ${n ? `<h3>Cuadro seleccionado</h3><div class="card"><label class="txtl"><span>Texto (una línea por renglón)</span><textarea class="txt" rows="3" data-o="no" data-k="texto" data-ty="s">${esc(n.texto)}</textarea></label>${rg('no', 'tam', 'Tamaño', 9, 40, 1, n.tam)}${cl('no', 'color', 'Color del texto', n.color)}${cl('no', 'fondo', 'Color del fondo', n.fondo)}${cl('no', 'borde', 'Color del borde', n.borde)}${rg('no', 'bw', 'Grosor del borde', 1, 8, 1, n.bw)}${ck('no', 'mayus', 'MAYÚSCULAS', n.mayus)}</div><div class="btns"><button class="btn" data-act="nota-ancla">${n.ancla ? 'Quitar la flecha' : 'Añadir flecha a un punto'}</button><button class="btn dng" data-act="quitar-sel">Quitar cuadro</button></div>${n.ancla ? '<p class="mut small">Arrastra el círculo del extremo de la flecha hasta el punto que quieres señalar.</p>' : ''}` : ''}
+    ${m ? `<h3>Señal seleccionada</h3><div class="card">${rg('ma', 'tam', 'Tamaño', 10, 200, 2, m.tam)}${rg('ma', 'rot', 'Giro (°)', -180, 180, 5, m.rot || 0)}<div class="btns"><button class="btn" data-act="giro" data-g="-90">⟲ 90°</button><button class="btn" data-act="giro" data-g="90">⟳ 90°</button><button class="btn" data-act="giro" data-g="0">Recto</button></div><label class="txtl"><span>Texto debajo (opcional)</span><input class="txt" value="${esc(m.texto)}" data-o="ma" data-k="texto" data-ty="s" placeholder="Ej.: C/ San Francisco"></label>${m.texto ? `${rg('ma', 'ttam', 'Tamaño del texto', 5, 50, 1, m.ttam)}${cl('ma', 'color', 'Color del texto', m.color)}` : ''}</div><div class="btns"><button class="btn dng" data-act="quitar-sel">Quitar señal</button></div>` : ''}
+    ${n ? `<h3>Cuadro seleccionado</h3><div class="card"><label class="txtl"><span>Texto (una línea por renglón)</span><textarea class="txt" rows="3" data-o="no" data-k="texto" data-ty="s">${esc(n.texto)}</textarea></label>${rg('no', 'tam', 'Tamaño', 5, 60, 1, n.tam)}${cl('no', 'color', 'Color del texto', n.color)}${cl('no', 'fondo', 'Color del fondo', n.fondo)}${cl('no', 'borde', 'Color del borde', n.borde)}${rg('no', 'bw', 'Grosor del borde', 1, 8, 1, n.bw)}${ck('no', 'mayus', 'MAYÚSCULAS', n.mayus)}</div><div class="btns"><button class="btn" data-act="nota-ancla">${n.ancla ? 'Quitar la flecha' : 'Añadir flecha a un punto'}</button><button class="btn dng" data-act="quitar-sel">Quitar cuadro</button></div>${n.ancla ? '<p class="mut small">Arrastra el círculo del extremo de la flecha hasta el punto que quieres señalar.</p>' : ''}` : ''}
     ${items.length ? `<h3>En el plano</h3><div class="lista">${items.map(x => `<div class="fila${(x.k === 'marca' ? S.sel.marca : S.sel.nota) === x.id ? ' on' : ''}" data-act="sel-el" data-k="${x.k}" data-id="${x.id}">${x.ic ? `<img src="${x.ic}" width="26" height="26" alt="">` : '<i style="background:#1d5fb5"></i>'}<b>${esc(x.t)}</b></div>`).join('')}</div>` : ''}
     <h3>Leyenda</h3>${ck('le', 'on', 'Mostrar leyenda en el plano', L.on)}
     ${L.on ? `<div class="card"><label class="txtl"><span>Posición</span><select class="txt" data-o="le" data-k="esq" data-ty="s">${[['ai', 'Arriba a la izquierda'], ['ad', 'Arriba a la derecha'], ['bi', 'Abajo a la izquierda'], ['bd', 'Abajo a la derecha']].map(([k, l]) => `<option value="${k}"${L.esq === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -346,7 +361,7 @@ function render() {
 }
 
 /* ───────── Acciones ───────── */
-const ruta = (o, id) => ({ g: () => S.p.gris, ti: () => S.p.tierra, p: () => S.p, t: selTrazoObj, fl: () => (selTrazoObj() || {}).flechas, lab: () => buscarEt(id), mar: () => S.marco, au: () => S, le: () => S.p.leyenda, ma: () => S.p.marcas.find(x => x.id === S.sel.marca), no: () => S.p.notas.find(x => x.id === S.sel.nota) })[o]();
+const ruta = (o, id) => ({ g: () => S.p.gris, ti: () => S.p.tierra, es: () => S.p.escala, p: () => S.p, t: selTrazoObj, fl: () => (selTrazoObj() || {}).flechas, lab: () => buscarEt(id), mar: () => S.marco, au: () => S, le: () => S.p.leyenda, ma: () => S.p.marcas.find(x => x.id === S.sel.marca), no: () => S.p.notas.find(x => x.id === S.sel.nota) })[o]();
 const fijar = (obj, k, v) => { obj[k] = v; };
 panel.addEventListener('input', ev => {
   const e = ev.target;
@@ -365,7 +380,7 @@ panel.addEventListener('input', ev => {
   if (e.dataset.o === 'g') { cont.style.background = S.p.base === 'gris' ? S.p.gris.fondo : ''; const mb = document.getElementById('muestraBase'); if (mb) mb.setAttribute('style', estiloMuestra()); }
   if (e.dataset.o === 'p' && e.dataset.k === 'nombre') $('#nombre').value = v;
   guardar(); redibujar();
-  if (e.type === 'checkbox' && ['fl', 'mar', 'le'].includes(e.dataset.o)) { if (e.dataset.o === 'mar') actualizarMarco(); render(); }
+  if (e.type === 'checkbox' && ['fl', 'mar', 'le', 'es'].includes(e.dataset.o)) { if (e.dataset.o === 'mar') actualizarMarco(); render(); }
   if (e.type === 'color' && e.dataset.o === 't') { const s = panel.querySelectorAll('.sw'); s.forEach(b => b.classList.toggle('on', b.dataset.v === v)); const f = panel.querySelector('.fila.on i'); if (f) f.style.background = v; }
 });
 $('#nombre').addEventListener('input', ev => { S.p.nombre = ev.target.value; guardar(); });
@@ -377,6 +392,7 @@ const alClic = ev => {
     case 'base': S.p.base = b.dataset.b; aplicarBase(); guardar(); render(); break;
     case 'tierra-def': S.p.tierra = nuevoProyecto().tierra; guardar(); render(); redibujar(); break;
     case 'gris-def': S.p.gris = nuevoProyecto().gris; aplicarBase(); guardar(); render(); break;
+    case 'esc-ref': fijarReferencia(); break;
     case 'zona-buscar': { const txt = (document.getElementById('zonaTxt') || {}).value; if (txt && txt.trim()) cambiarZona(txt.trim()); else aviso('Escribe el nombre de la localidad'); break; }
     case 'zona-db': irAZona(DON_BENITO); break;
     case 'red-calles': loadNet(true, estadoCalles).then(() => { render(); redibujar(); }); if (S.p.base === 'tierra') loadVerdes(true).then(() => redibujar()); break;

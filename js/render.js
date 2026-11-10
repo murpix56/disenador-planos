@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc, manzanas } from './net.js?v=20261108r';
+import { net, merc, manzanas } from './net.js?v=20261108s';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -156,7 +156,7 @@ function borrador(ctx, v, b) {
 }
 
 /* ───────── Señales ───────── */
-export const TRAFICO = { prohibido: 'Dirección prohibida', obras: 'Obras', peligro: 'Peligro', estacionar: 'Prohibido estacionar', salida: 'Salida / llegada', meta: 'Meta', obligatorio: 'Dirección obligatoria', minusvalido: 'Plaza movilidad reducida', stop: 'STOP', ceda: 'Ceda el paso', circprohibida: 'Circulación prohibida', limite30: 'Velocidad 30' };
+export const TRAFICO = { prohibido: 'Dirección prohibida', obras: 'Obras', peligro: 'Peligro', estacionar: 'Prohibido estacionar', salida: 'Salida / llegada', meta: 'Meta', obligatorio: 'Dirección obligatoria', minusvalido: 'Plaza movilidad reducida', stop: 'STOP', ceda: 'Ceda el paso', circprohibida: 'Circulación prohibida', limite20: 'Velocidad 20', limite30: 'Velocidad 30', limite40: 'Velocidad 40', limite50: 'Velocidad 50', limite60: 'Velocidad 60' };
 /* Puntos de referencia (dibujos): no salen en la leyenda */
 export const REFERENCIAS = { iglesia: 'Iglesia', edificio: 'Edificio', fuente: 'Fuente', futbol: 'Campo de fútbol', arco: 'Arco (sin texto)', arcosalida: 'Arco de salida', arcometa: 'Arco de meta', aparcamiento: 'Aparcamiento', parque: 'Parque / árbol', ayuntamiento: 'Ayuntamiento', colegio: 'Colegio', toros: 'Plaza de toros', centrosalud: 'Centro de salud' };
 /* Objetos para cortes de calle (dibujos): agente, coche patrulla, valla, cono, raya y cinta; no salen en la leyenda */
@@ -322,9 +322,9 @@ export function dibujarSenal(ctx, tipo, x, y, s, k = 1, rot = 0) {
     ctx.fillStyle = '#fff'; ctx.font = `800 ${s * 0.32}px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('STOP', 0, s * 0.02);
   } else if (tipo === 'ceda') {
     ctx.beginPath(); ctx.moveTo(0, s * 0.4); ctx.lineTo(s * 0.46, -s * 0.38); ctx.lineTo(-s * 0.46, -s * 0.38); ctx.closePath(); sombra(ctx, k); ctx.fillStyle = '#fff'; ctx.fill(); sinSombra(ctx); ctx.lineWidth = s * 0.12; ctx.strokeStyle = '#d92d20'; ctx.stroke();
-  } else if (tipo === 'circprohibida' || tipo === 'limite30') {
+  } else if (tipo === 'circprohibida' || /^limite\d+$/.test(tipo)) {
     ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); sombra(ctx, k); ctx.fillStyle = '#fff'; ctx.fill(); sinSombra(ctx); ctx.beginPath(); ctx.arc(0, 0, r - s * 0.075, 0, 7); ctx.lineWidth = s * 0.15; ctx.strokeStyle = '#d92d20'; ctx.stroke();
-    if (tipo === 'limite30') { ctx.fillStyle = '#101828'; ctx.font = `800 ${s * 0.44}px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('30', 0, s * 0.02); }
+    if (tipo !== 'circprohibida') { ctx.fillStyle = '#101828'; ctx.font = `800 ${s * 0.44}px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(tipo.slice(6), 0, s * 0.02); }
   } else if (tipo === 'minusvalido') {
     const u = s / 100; rr(ctx, -r, -r, s, s, s * 0.12); sombra(ctx, k); ctx.fillStyle = '#1d5fb5'; ctx.fill(); sinSombra(ctx); ctx.lineWidth = s * 0.045; ctx.strokeStyle = '#fff'; ctx.stroke();
     ctx.save(); ctx.scale(u, u); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#fff'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -435,15 +435,22 @@ function leyenda(ctx, v, p, area) {
 }
 
 /* ───────── Dibujo completo ───────── */
+/* Proporción con el zoom: los tamaños (líneas, flechas, nombres, señales, cuadros) se escalan como si fueran parte del mapa,
+ * tomando como referencia el zoom en que se ajustaron (p.escala.zref). gamma 1 = proporcional del todo; 0 = sin cambio. */
+export function factorEscalaZoom(p, z) {
+  const e = p.escala; if (!e || !e.on || e.zref == null) return 1;
+  return Math.min(8, Math.max(0.05, Math.pow(2, (z - e.zref) * (e.gamma == null ? 1 : e.gamma))));
+}
 export function dibujar(ctx, v, p, ui = {}) {
   const hits = { labels: [], trazos: [], marcas: [], notas: [] }, cache = new Map(), area = ui.area || { x: 0, y: 0, w: v.w, h: v.h };
+  const fe = factorEscalaZoom(p, Math.log2(v.S / (256 * v.k))), vo = fe === 1 ? v : { ...v, k: v.k * fe };   /* vo: vista con los tamaños escalados (todo menos el fondo y la leyenda) */
   ctx.save(); ctx.clearRect(0, 0, v.w, v.h);
   if (p.base === 'gris') { ctx.fillStyle = p.gris.fondo; ctx.fillRect(0, 0, v.w, v.h); calles(ctx, v, p); }
   else if (p.base === 'tierra') { ctx.fillStyle = TIERRA.fondo; ctx.fillRect(0, 0, v.w, v.h); callesTierra(ctx, v, p); }
-  for (const t of p.trazos) if (t.visible !== false) trazo(ctx, v, t, ui, hits, cache);
-  for (const t of p.trazos) if (t.visible !== false) for (const l of t.etiquetas) if (l.visible !== false) etiqueta(ctx, v, t, l, ui, hits, cache);
-  for (const m of p.marcas || []) marca(ctx, v, m, ui, hits);
-  for (const n of p.notas || []) nota(ctx, v, n, ui, hits);
+  for (const t of p.trazos) if (t.visible !== false) trazo(ctx, vo, t, ui, hits, cache);
+  for (const t of p.trazos) if (t.visible !== false) for (const l of t.etiquetas) if (l.visible !== false) etiqueta(ctx, vo, t, l, ui, hits, cache);
+  for (const m of p.marcas || []) marca(ctx, vo, m, ui, hits);
+  for (const n of p.notas || []) nota(ctx, vo, n, ui, hits);
   leyenda(ctx, v, p, area);
   if (ui.borrador) borrador(ctx, v, ui.borrador);
   ctx.restore(); return hits;
