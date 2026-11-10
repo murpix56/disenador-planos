@@ -20,6 +20,7 @@ Herramienta **personal** (de un subinspector de la Policía Local de Don Benito)
 - Flechas: solo se colocan donde el trazo es casi recto (no en glorietas ni curvas cerradas, a cualquier zoom, `flechas()` en render.js) y se pueden quitar de una **zona** (`flechas.sin`: círculos en metros anclados al mapa). Posición y número dependen del zoom porque separación y tamaño son en píxeles.
 - Flechas de **doble sentido** (`flechas.doble`: flecha con dos puntas; la leyenda pone «Doble sentido»).
 - **Puntos de referencia** (dibujos, `dibujarRef` en render.js; no salen en la leyenda): iglesia, edificio, fuente, campo de fútbol, arco liso verde (sin texto), arco de salida y de meta, aparcamiento, parque/árbol.
+- Pestaña Señales: **desplegable de categoría** (`CATS` en app.js: Señales de tráfico, Puntos de referencia, Cortes de calle) y debajo sus objetos. **Cortes de calle** (`CORTES`, `dibujarCorte` en render.js; no salen en la leyenda): agente de Policía Local, coche patrulla, valla, cono, raya de corte y cinta rojiblanca (la raya y la cinta se orientan y alargan con giro y tamaño).
 - Señal de «plaza de movilidad reducida» (silla de ruedas, `minusvalido`). Selector de fondo con cuadrito de muestra.
 - Señal de «dirección obligatoria» (flecha blanca en círculo azul; se orienta con el giro).
 - Señales con giro (`marca.rot`, deslizador y botones de 90°).

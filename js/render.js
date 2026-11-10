@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc, manzanas } from './net.js?v=20261108n';
+import { net, merc, manzanas } from './net.js?v=20261108o';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -159,10 +159,47 @@ function borrador(ctx, v, b) {
 export const TRAFICO = { prohibido: 'Dirección prohibida', obras: 'Obras', peligro: 'Peligro', estacionar: 'Prohibido estacionar', salida: 'Salida / llegada', meta: 'Meta', obligatorio: 'Dirección obligatoria', minusvalido: 'Plaza movilidad reducida' };
 /* Puntos de referencia (dibujos): no salen en la leyenda */
 export const REFERENCIAS = { iglesia: 'Iglesia', edificio: 'Edificio', fuente: 'Fuente', futbol: 'Campo de fútbol', arco: 'Arco (sin texto)', arcosalida: 'Arco de salida', arcometa: 'Arco de meta', aparcamiento: 'Aparcamiento', parque: 'Parque / árbol' };
-export const SENALES = { ...TRAFICO, ...REFERENCIAS };
+/* Objetos para cortes de calle (dibujos): agente, coche patrulla, valla, cono, raya y cinta; no salen en la leyenda */
+export const CORTES = { agente: 'Agente de Policía Local', patrulla: 'Coche patrulla', valla: 'Valla', cono: 'Cono', raya: 'Raya de corte', cinta: 'Cinta rojiblanca' };
+export const SENALES = { ...TRAFICO, ...REFERENCIAS, ...CORTES };
 const poli = (ctx, pts, fill, borde) => { ctx.beginPath(); pts.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.closePath(); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (borde) { ctx.strokeStyle = borde; ctx.stroke(); } };
 const rect = (ctx, x, y, w, h, fill, borde) => poli(ctx, [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], fill, borde);
 const disco = (ctx, x, y, r, fill, borde) => { ctx.beginPath(); ctx.arc(x, y, r, 0, 7); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (borde) { ctx.strokeStyle = borde; ctx.stroke(); } };
+function rayas(ctx, x, y, w, h, paso, c1, c2) {
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); rect(ctx, x, y, w, h, c1);
+  for (let i = -h; i < w + h; i += paso * 2) poli(ctx, [[x + i, y + h], [x + i + paso, y + h], [x + i + paso + h, y], [x + i + h, y]], c2);
+  ctx.restore();
+}
+function dibujarCorte(ctx, tipo, s) {
+  const u = s / 100, O = 'rgba(16,24,40,.5)'; ctx.scale(u, u); ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (tipo === 'agente') {
+    ctx.translate(0, 2); const AZ = '#1f3b73', PIEL = '#f1c9a5';
+    poli(ctx, [[-22, -20], [-30, -18], [-34, 12], [-25, 13]], AZ, O); disco(ctx, -30, 15, 5, PIEL, O);                 /* brazo caído */
+    poli(ctx, [[20, -22], [25, -12], [46, -27], [41, -37]], AZ, O); disco(ctx, 47, -32, 6, '#ffffff', O);                /* brazo con la mano en alto (señal de alto) */
+    rect(ctx, -14, 20, 12, 26, '#16284f', O); rect(ctx, 2, 20, 12, 26, '#16284f', O); rect(ctx, -16, 44, 15, 6, '#111827'); rect(ctx, 1, 44, 15, 6, '#111827');
+    poli(ctx, [[-22, -24], [22, -24], [24, 22], [-24, 22]], AZ, O); poli(ctx, [[-23, -6], [23, -6], [23.5, 2], [-23.5, 2]], '#f5d90a'); rect(ctx, -24, 16, 48, 6, '#111827');
+    disco(ctx, 0, -38, 11, PIEL, O);
+    ctx.beginPath(); ctx.arc(0, -41, 12.5, Math.PI, 0); ctx.closePath(); ctx.fillStyle = AZ; ctx.fill(); ctx.strokeStyle = O; ctx.stroke();
+    for (let i = 0; i < 5; i++) rect(ctx, -12.5 + i * 5, -42, 5, 5, i % 2 ? '#ffffff' : '#1d5fb5'); rect(ctx, -14, -37, 28, 3, '#111827'); disco(ctx, 0, -47, 2.4, '#f5d90a');
+  } else if (tipo === 'patrulla') {
+    ctx.translate(0, 2);
+    poli(ctx, [[-28, 2], [-15, -18], [19, -18], [32, 2]], '#ffffff', O); poli(ctx, [[-22, 0], [-13, -14], [-1, -14], [-1, 0]], '#9fc9e8'); poli(ctx, [[2, 0], [2, -14], [17, -14], [26, 0]], '#9fc9e8');
+    rect(ctx, -9, -23, 9, 5, '#1d5fb5', O); rect(ctx, 0, -23, 9, 5, '#d92d20', O);
+    rr(ctx, -48, 0, 96, 26, 8); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.strokeStyle = O; ctx.stroke(); rect(ctx, -46, 9, 92, 6, '#1d5fb5'); rect(ctx, -46, 15, 92, 2.5, '#f5d90a');
+    for (const x of [-28, 28]) { disco(ctx, x, 27, 10, '#111827'); disco(ctx, x, 27, 4.5, '#9ca3af'); }
+  } else if (tipo === 'valla') {
+    ctx.translate(0, 2); rect(ctx, -46, 36, 24, 5, '#44505e'); rect(ctx, 22, 36, 24, 5, '#44505e');
+    rayas(ctx, -38, -14, 76, 28, 9, '#ffffff', '#d92d20'); ctx.strokeStyle = '#44505e'; ctx.lineWidth = 4; ctx.strokeRect(-38, -14, 76, 28);
+    ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(-38, -34); ctx.lineTo(-38, 38); ctx.moveTo(38, -34); ctx.lineTo(38, 38); ctx.moveTo(-38, -30); ctx.lineTo(38, -30); ctx.moveTo(-38, 22); ctx.lineTo(38, 22); ctx.stroke();
+  } else if (tipo === 'cono') {
+    ctx.translate(0, 2); rect(ctx, -30, 34, 60, 9, '#374151', O); poli(ctx, [[-5, -44], [5, -44], [23, 34], [-23, 34]], '#f97316', O);
+    const hw = y => 5 + (y + 44) / 78 * 18; for (const [a, b] of [[-18, -6], [8, 22]]) poli(ctx, [[-hw(a), a], [hw(a), a], [hw(b), b], [-hw(b), b]], '#ffffff');
+  } else if (tipo === 'raya') {
+    rr(ctx, -50, -7, 100, 14, 7); ctx.fillStyle = '#d92d20'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+  } else if (tipo === 'cinta') {
+    ctx.save(); rr(ctx, -50, -7, 100, 14, 7); ctx.clip(); rayas(ctx, -50, -7, 100, 14, 8, '#ffffff', '#d92d20'); ctx.restore(); rr(ctx, -50, -7, 100, 14, 7); ctx.lineWidth = 2.4; ctx.strokeStyle = O; ctx.stroke();
+  }
+}
 function dibujarRef(ctx, tipo, s) {
   const u = s / 100, O = 'rgba(16,24,40,.5)', SUELO = '#9a8f86'; ctx.scale(u, u); ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   if (tipo === 'iglesia') {
@@ -258,6 +295,8 @@ export function dibujarSenal(ctx, tipo, x, y, s, k = 1, rot = 0) {
     ctx.beginPath(); ctx.moveTo(s * 0.13, s * 0.3); ctx.lineTo(s * 0.18, s * 0.22); ctx.lineTo(s * 0.25, s * 0.21); ctx.lineTo(s * 0.31, s * 0.3); ctx.closePath(); ctx.fill();
   } else if (REFERENCIAS[tipo]) {
     dibujarRef(ctx, tipo, s);
+  } else if (CORTES[tipo]) {
+    dibujarCorte(ctx, tipo, s);
   } else if (tipo === 'salida') {
     ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); sombra(ctx, k); ctx.fillStyle = '#fff'; ctx.fill(); sinSombra(ctx);
     ctx.beginPath(); ctx.arc(0, 0, r * 0.74, 0, 7); ctx.fillStyle = '#16a34a'; ctx.fill(); ctx.lineWidth = s * 0.04; ctx.strokeStyle = '#0f7a37'; ctx.stroke();
@@ -311,7 +350,7 @@ export function filasLeyenda(p) {
   const filas = [];
   for (const t of p.trazos) if (t.visible !== false && t.segs.length) filas.push({ key: 't:' + t.id, k: 'linea', t, txt: t.nombre });
   if (p.trazos.some(t => t.visible !== false && t.flechas && t.flechas.on)) { const t = p.trazos.find(q => q.visible !== false && q.flechas && q.flechas.on); filas.push({ key: 'flecha', k: 'flecha', t, txt: t.flechas.doble ? 'Doble sentido' : 'Sentido de la marcha' }); }
-  [...new Set(p.marcas.map(m => m.tipo))].filter(tp => !REFERENCIAS[tp]).forEach(tp => filas.push({ key: 's:' + tp, k: 'senal', tp, txt: SENALES[tp] }));
+  [...new Set(p.marcas.map(m => m.tipo))].filter(tp => !REFERENCIAS[tp] && !CORTES[tp]).forEach(tp => filas.push({ key: 's:' + tp, k: 'senal', tp, txt: SENALES[tp] }));
   return filas;
 }
 function leyenda(ctx, v, p, area) {

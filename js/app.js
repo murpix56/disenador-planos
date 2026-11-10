@@ -1,8 +1,8 @@
 /* Diseñador de planos · Policía Local de Don Benito (uso personal)
  * Plano gris y blanco (o calles / satélite), recorrido que sigue las calles, color, flechas y nombres a medida, y descarga en PNG. */
-import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108n';
-import { net, CFG, DON_BENITO, setZona, buscarZona, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108n';
-import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108n';
+import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108o';
+import { net, CFG, DON_BENITO, setZona, buscarZona, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108o';
+import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, CORTES, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108o';
 
 /* ───────── Proyecto ───────── */
 const PROY_KEY = 'plano.proyecto.v1';
@@ -61,7 +61,7 @@ function irHist(dir) {
 const deshacerProy = () => irHist(-1), rehacerProy = () => irHist(1);
 
 const selVacio = () => ({ trazo: null, label: null, marca: null, nota: null });
-const S = { p: cargar(), tab: 'trazos', sel: selVacio(), preset: 'itinerario', autoMarcas: true, dib: null, hover: null, colocar: null, drag: null, suprimir: false, abreviar: true, radioZona: 25, netTxt: 'Cargando callejero…', marco: { on: true, fmt: '1080x1080', w: 1080, h: 1080, px: { w: 0, h: 0 } } };
+const S = { p: cargar(), tab: 'trazos', sel: selVacio(), preset: 'itinerario', autoMarcas: true, dib: null, hover: null, colocar: null, drag: null, suprimir: false, abreviar: true, catSenal: 'trafico', radioZona: 25, netTxt: 'Cargando callejero…', marco: { on: true, fmt: '1080x1080', w: 1080, h: 1080, px: { w: 0, h: 0 } } };
 const selTrazoObj = () => S.p.trazos.find(t => t.id === S.sel.trazo);
 const buscarEt = id => { for (const t of S.p.trazos) { const l = t.etiquetas.find(x => x.id === id); if (l) return l; } return null; };
 
@@ -163,7 +163,7 @@ const fijarSel = el => {
 function colocarAqui(ll) {
   const c = S.colocar; S.colocar = c.k === 'sinflecha' ? c : null;
   if (c.k === 'label') { const t = selTrazoObj(); if (!t) return; const l = nuevaEtiqueta('NOMBRE', ll.lat, ll.lng); t.etiquetas.push(l); S.sel = { ...S.sel, label: l.id }; }
-  else if (c.k === 'marca') { const m = nuevaMarca(c.tipo, ll.lat, ll.lng); if (REFERENCIAS[c.tipo]) m.tam = 64; S.p.marcas.push(m); S.sel = { ...selVacio(), marca: m.id }; }
+  else if (c.k === 'marca') { const m = nuevaMarca(c.tipo, ll.lat, ll.lng); m.tam = REFERENCIAS[c.tipo] ? 64 : ({ agente: 64, patrulla: 84, valla: 64, cono: 44, raya: 90, cinta: 90 })[c.tipo] || m.tam; S.p.marcas.push(m); S.sel = { ...selVacio(), marca: m.id }; }
   else if (c.k === 'sinflecha') { const t = selTrazoObj(); if (!t) return; t.flechas.sin = [...(t.flechas.sin || []), { lat: ll.lat, lon: ll.lng, r: S.radioZona }]; }
   else if (c.k === 'nota') { const n = nuevaNota(ll.lat, ll.lng); S.p.notas.push(n); S.sel = { ...selVacio(), nota: n.id }; }
   guardar(); render(); redibujar();
@@ -299,13 +299,16 @@ function vistaNombres() {
     <label class="ck sep"><input type="checkbox" id="abrev" ${S.abreviar ? 'checked' : ''}><span>Abreviar al crear (C/, Avda., Pza., Pº, Trv., Cno.)</span></label>
     <p class="mut small">Arrastra un nombre en el mapa para moverlo. El giro se suma a la dirección de la calle.</p>`;
 }
+const CATS = { trafico: { nombre: 'Señales de tráfico', items: TRAFICO }, referencia: { nombre: 'Puntos de referencia', items: REFERENCIAS }, cortes: { nombre: 'Cortes de calle', items: CORTES } };
 const iconos = {};
 function icono(tipo) { if (!iconos[tipo]) { const c = document.createElement('canvas'); c.width = c.height = 88; dibujarSenal(c.getContext('2d'), tipo, 44, 46, 66, 1); iconos[tipo] = c.toDataURL(); } return iconos[tipo]; }
 function vistaSenales() {
   const m = S.sel.marca && S.p.marcas.find(x => x.id === S.sel.marca), n = S.sel.nota && S.p.notas.find(x => x.id === S.sel.nota), L = S.p.leyenda, col = S.colocar;
   const items = [...S.p.marcas.map(x => ({ k: 'marca', id: x.id, t: SENALES[x.tipo] + (x.texto ? ' · ' + x.texto : ''), ic: icono(x.tipo) })), ...S.p.notas.map(x => ({ k: 'nota', id: x.id, t: x.texto.split('\n')[0], ic: '' }))];
-  return `<h3>Señales de tráfico</h3><div class="pal">${Object.entries(TRAFICO).map(([k, l]) => `<button class="pb${col && col.tipo === k ? ' on' : ''}" data-act="poner" data-tipo="${k}"><img src="${icono(k)}" alt="" width="44" height="44"><span>${l}</span></button>`).join('')}</div>
-    <h3>Puntos de referencia</h3><div class="pal">${Object.entries(REFERENCIAS).map(([k, l]) => `<button class="pb${col && col.tipo === k ? ' on' : ''}" data-act="poner" data-tipo="${k}"><img src="${icono(k)}" alt="" width="44" height="44"><span>${l}</span></button>`).join('')}</div>
+  const cat = CATS[S.catSenal] || CATS.trafico;
+  return `<h3>Señales y objetos</h3>
+    <label class="txtl"><span>Categoría</span><select class="txt" data-cat="1" aria-label="Categoría">${Object.entries(CATS).map(([k, c]) => `<option value="${k}"${S.catSenal === k ? ' selected' : ''}>${c.nombre}</option>`).join('')}</select></label>
+    <div class="pal">${Object.entries(cat.items).map(([k, l]) => `<button class="pb${col && col.tipo === k ? ' on' : ''}" data-act="poner" data-tipo="${k}"><img src="${icono(k)}" alt="" width="44" height="44"><span>${l}</span></button>`).join('')}</div>
     ${col && col.k === 'marca' ? `<div class="hint">Pulsa en el mapa donde quieras la señal de «${SENALES[col.tipo]}».</div>` : ''}
     <h3>Cuadro de texto</h3><button class="btn" data-act="poner-nota">＋ Añadir cuadro de texto</button>${col && col.k === 'nota' ? '<div class="hint">Pulsa en el mapa donde quieras el cuadro.</div>' : ''}
     ${m ? `<h3>Señal seleccionada</h3><div class="card">${rg('ma', 'tam', 'Tamaño', 20, 120, 2, m.tam)}${rg('ma', 'rot', 'Giro (°)', -180, 180, 5, m.rot || 0)}<div class="btns"><button class="btn" data-act="giro" data-g="-90">⟲ 90°</button><button class="btn" data-act="giro" data-g="90">⟳ 90°</button><button class="btn" data-act="giro" data-g="0">Recto</button></div><label class="txtl"><span>Texto debajo (opcional)</span><input class="txt" value="${esc(m.texto)}" data-o="ma" data-k="texto" data-ty="s" placeholder="Ej.: C/ San Francisco"></label>${m.texto ? `${rg('ma', 'ttam', 'Tamaño del texto', 8, 30, 1, m.ttam)}${cl('ma', 'color', 'Color del texto', m.color)}` : ''}</div><div class="btns"><button class="btn dng" data-act="quitar-sel">Quitar señal</button></div>` : ''}
@@ -350,6 +353,7 @@ panel.addEventListener('input', ev => {
   if (e.id === 'irCalle') { $('#listaCalles').innerHTML = searchStreets(e.value).map(n => `<option value="${esc(n)}">`).join(''); const b = streetBounds(e.value); if (b) map.fitBounds(b, { padding: [40, 40], maxZoom: 18 }); return; }
   if (e.dataset.base) { S.p.base = e.value; aplicarBase(); guardar(); render(); return; }
   if (e.id === 'zonaTxt') return;
+  if (e.dataset.cat) { S.catSenal = e.value; render(); return; }
   if (e.id === 'abrev') { S.abreviar = e.checked; return; }
   if (e.dataset.lk) { const L = S.p.leyenda, oc = (L.ocultos || []).filter(x => x !== e.dataset.lk); if (!e.checked) oc.push(e.dataset.lk); L.ocultos = oc; guardar(); redibujar(); return; }
   if (!e.dataset.o) return;
