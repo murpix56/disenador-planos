@@ -1,8 +1,8 @@
 /* Diseñador de planos · Policía Local de Don Benito (uso personal)
  * Plano gris y blanco (o calles / satélite), recorrido que sigue las calles, color, flechas y nombres a medida, y descarga en PNG. */
-import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108p';
-import { net, CFG, DON_BENITO, setZona, buscarZona, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108p';
-import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, CORTES, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108p';
+import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108q';
+import { net, CFG, DON_BENITO, setZona, buscarZona, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108q';
+import { filasLeyenda, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, CORTES, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108q';
 
 /* ───────── Proyecto ───────── */
 const PROY_KEY = 'plano.proyecto.v1';
@@ -163,7 +163,7 @@ const fijarSel = el => {
 function colocarAqui(ll) {
   const c = S.colocar; S.colocar = c.k === 'sinflecha' ? c : null;
   if (c.k === 'label') { const t = selTrazoObj(); if (!t) return; const l = nuevaEtiqueta('NOMBRE', ll.lat, ll.lng); t.etiquetas.push(l); S.sel = { ...S.sel, label: l.id }; }
-  else if (c.k === 'marca') { const m = nuevaMarca(c.tipo, ll.lat, ll.lng); m.tam = REFERENCIAS[c.tipo] ? 64 : ({ agente: 64, patrulla: 84, valla: 64, cono: 44, raya: 90, cinta: 90 })[c.tipo] || m.tam; S.p.marcas.push(m); S.sel = { ...selVacio(), marca: m.id }; }
+  else if (c.k === 'marca') { const m = nuevaMarca(c.tipo, ll.lat, ll.lng); m.tam = REFERENCIAS[c.tipo] ? 64 : ({ agente: 76, agentebusto: 52, patrulla: 84, valla: 64, cono: 44, raya: 90, cinta: 90 })[c.tipo] || m.tam; S.p.marcas.push(m); S.sel = { ...selVacio(), marca: m.id }; }
   else if (c.k === 'sinflecha') { const t = selTrazoObj(); if (!t) return; t.flechas.sin = [...(t.flechas.sin || []), { lat: ll.lat, lon: ll.lng, r: S.radioZona }]; }
   else if (c.k === 'nota') { const n = nuevaNota(ll.lat, ll.lng); S.p.notas.push(n); S.sel = { ...selVacio(), nota: n.id }; }
   guardar(); render(); redibujar();
