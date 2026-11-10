@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc, manzanas } from './net.js?v=20261108s';
+import { net, merc, manzanas } from './net.js?v=20261108t';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -189,19 +189,24 @@ function dibujarCorte(ctx, tipo, s) {
     elipse(0, -46, 12.8, 5.2, MARINO); rect(ctx, -11.5, -45.5, 23, 5.4, MARINO); for (let i = 0; i < 10; i++) { rect(ctx, -11 + i * 2.2, -44.4, 2.2, 2.2, i % 2 ? '#1f2937' : '#f4f6f8'); rect(ctx, -11 + i * 2.2, -42.2, 2.2, 2.2, i % 2 ? '#f4f6f8' : '#1f2937'); }
     poli(ctx, [[-11.5, -40], [11.5, -40], [12.3, -36.4], [-12.3, -36.4]], MARINO); rect(ctx, -9, -39.4, 18, 2.2, '#5b7fb0'); disco(ctx, 0, -48, 3, '#eaeef5');
   } else if (tipo === 'agentebusto') {
-    /* Icono de agente (busto) con contorno oscuro, estilo plano */
-    const N1 = '#3a5873', N2 = '#29465c', PIEL = '#fae6d3', K = '#0b1220'; ctx.lineWidth = 3.6;
-    const rel = (c, f) => { ctx.fillStyle = c; ctx.fill(); ctx.strokeStyle = K; ctx.stroke(); };
-    ctx.translate(0, 3); ctx.scale(0.93, 0.93);
-    ctx.beginPath(); ctx.moveTo(-9, -22); ctx.lineTo(-9, -9); ctx.lineTo(0, 2); ctx.lineTo(9, -9); ctx.lineTo(9, -22); ctx.closePath(); rel(PIEL);
-    ctx.beginPath(); ctx.moveTo(-46, 49); ctx.lineTo(-46, 12); ctx.quadraticCurveTo(-46, -7, -28, -10); ctx.lineTo(-11, -13); ctx.lineTo(0, 3); ctx.lineTo(11, -13); ctx.lineTo(28, -10); ctx.quadraticCurveTo(46, -7, 46, 12); ctx.lineTo(46, 49); ctx.closePath(); rel(N1);
-    ctx.beginPath(); ctx.moveTo(-11, -13); ctx.lineTo(0, 3); ctx.lineTo(-13, 7); ctx.lineTo(-21, -6); ctx.closePath(); rel(N2); ctx.beginPath(); ctx.moveTo(11, -13); ctx.lineTo(0, 3); ctx.lineTo(13, 7); ctx.lineTo(21, -6); ctx.closePath(); rel(N2);
-    ctx.beginPath(); ctx.moveTo(-3, 3); ctx.lineTo(3, 3); ctx.lineTo(7, 50); ctx.lineTo(-7, 50); ctx.closePath(); rel('#272d3a');
-    for (const sx of [-1, 1]) { ctx.save(); ctx.translate(sx * 36, -2); ctx.rotate(sx * 0.7); ctx.beginPath(); ctx.ellipse(0, 0, 5.5, 3.4, 0, 0, 7); rel('#f4bd3a'); ctx.restore(); rr(ctx, sx * 22 - 8, 22, 16, 11, 2.5); rel(N1); rect(ctx, sx * 22 - 5, 25, 10, 5, N2); ctx.beginPath(); ctx.moveTo(sx * 36, 22); ctx.lineTo(sx * 36, 50); ctx.stroke(); }
-    ctx.beginPath(); ctx.ellipse(0, -26, 15.5, 16.5, 0, 0, 7); rel(PIEL);
-    for (const sx of [-1, 1]) { rr(ctx, sx * 15.5 - 3, -30, 6, 10, 3); rel(PIEL); }
-    ctx.beginPath(); ctx.ellipse(0, -46, 27, 8.5, 0, 0, 7); rel(N1);
-    rr(ctx, -16, -46, 32, 13, 3.5); rel(N2); ctx.beginPath(); ctx.moveTo(-16, -33); ctx.quadraticCurveTo(0, -27.5, 16, -33); ctx.stroke();
+    /* Icono de agente (busto), estilo plano: gorra de plato oscura con escudo dorado, chaleco negro, hombreras, corbata y radio al hombro */
+    const elipse = (x, y, rx, ry, c) => { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, 7); ctx.fillStyle = c; ctx.fill(); }, escudo = (cx, cy, q, c) => poli(ctx, [[cx - 4 * q, cy - 5 * q], [cx + 4 * q, cy - 5 * q], [cx + 5 * q, cy + q], [cx, cy + 6 * q], [cx - 5 * q, cy + q]], c);
+    ctx.lineWidth = 0; ctx.translate(0, 2);
+    poli(ctx, [[-48, 50], [-46, 16], [-38, 8], [-20, 3], [20, 3], [38, 8], [46, 16], [48, 50]], '#e3e6ee');
+    poli(ctx, [[-36, 50], [-36, 16], [-30, 8], [-12, 3], [-4, 30], [-4, 50]], '#1e1e1e'); poli(ctx, [[36, 50], [36, 16], [30, 8], [12, 3], [4, 30], [4, 50]], '#1e1e1e');
+    rect(ctx, -12, 36, 24, 14, '#1e1e1e'); poli(ctx, [[-20, 50], [-14, 46], [14, 46], [20, 50]], '#3a3a3d');
+    poli(ctx, [[-8, -10], [8, -10], [8, -2], [0, 6], [-8, -2]], '#f2d5ae'); ctx.beginPath(); ctx.ellipse(0, -4, 9, 6, 0, 0, Math.PI); ctx.fillStyle = '#dfae78'; ctx.fill();
+    poli(ctx, [[-13, 2], [0, 18], [-10, 24], [-20, 8]], '#d1d3d8'); poli(ctx, [[13, 2], [0, 18], [10, 24], [20, 8]], '#d1d3d8');
+    poli(ctx, [[-3.5, 17], [3.5, 17], [0, 22]], '#111111'); poli(ctx, [[-2.6, 20], [2.6, 20], [4.2, 40], [0, 43], [-4.2, 40]], '#111111');
+    poli(ctx, [[-42, 14], [-40, 6], [-26, 3], [-16, 0], [-14, 8], [-34, 14]], '#3c3c3f'); poli(ctx, [[42, 14], [40, 6], [26, 3], [16, 0], [14, 8], [34, 14]], '#3c3c3f');
+    rr(ctx, 21, 12, 10, 18, 1.6); ctx.fillStyle = '#121212'; ctx.fill(); rect(ctx, 22.6, 14, 6.8, 6, '#cfd0d3'); rr(ctx, 24.4, 6.5, 2.4, 6, 1.2); ctx.fillStyle = '#121212'; ctx.fill();
+    elipse(-19, -22, 4.6, 6.4, '#f2d5ae'); elipse(19, -22, 4.6, 6.4, '#f2d5ae'); elipse(0, -21, 17, 20, '#f2d5ae');
+    poli(ctx, [[-17, -36], [-12, -32], [-13, -20], [-16, -20]], '#2b0f0a'); poli(ctx, [[17, -36], [12, -32], [13, -20], [16, -20]], '#2b0f0a');
+    poli(ctx, [[-30, -36], [-24, -49], [-9, -54], [9, -54], [24, -49], [30, -36], [19, -29], [-19, -29]], '#1a1a24');
+    poli(ctx, [[-20, -31], [-14, -38], [0, -40], [14, -38], [20, -31], [20, -27], [0, -31], [-20, -27]], '#25272d');
+    ctx.beginPath(); ctx.moveTo(-20, -30); ctx.quadraticCurveTo(0, -37, 20, -30); ctx.quadraticCurveTo(20, -21, 0, -20); ctx.quadraticCurveTo(-20, -21, -20, -30); ctx.closePath(); ctx.fillStyle = '#1d1d1d'; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-20, -29.5); ctx.quadraticCurveTo(0, -36.5, 20, -29.5); ctx.lineWidth = 1.8; ctx.strokeStyle = '#0e0e0e'; ctx.stroke(); ctx.lineWidth = 2;
+    escudo(0, -45, 1.15, '#eec544');
   } else if (tipo === 'patrulla') {
     ctx.translate(0, 2);
     poli(ctx, [[-28, 2], [-15, -18], [19, -18], [32, 2]], '#ffffff', O); poli(ctx, [[-22, 0], [-13, -14], [-1, -14], [-1, 0]], '#9fc9e8'); poli(ctx, [[2, 0], [2, -14], [17, -14], [26, 0]], '#9fc9e8');

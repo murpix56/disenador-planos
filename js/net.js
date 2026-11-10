@@ -1,5 +1,5 @@
 /* Callejero (OpenStreetMap vía Overpass), grafo, ajuste a calle, rutas y localización de tramos por nombre */
-import { lsGet, lsSet, normName, lengthM } from './util.js?v=20261108s';
+import { lsGet, lsSet, normName, lengthM } from './util.js?v=20261108t';
 
 /* Zona de trabajo (localidad cuyo callejero se descarga). Por defecto, Don Benito; se puede cambiar desde la pestaña Plano. */
 export const DON_BENITO = { id: 'don-benito', nombre: 'Don Benito', center: [38.9565, -5.8612], bbox: [38.936, -5.884, 38.976, -5.838] };   // bbox: S, O, N, E (casco urbano Don Benito–Villanueva)
