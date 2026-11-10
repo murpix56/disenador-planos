@@ -1,5 +1,5 @@
 /* Motor de dibujo: el MISMO código pinta la pantalla y la imagen que se descarga. */
-import { net, merc, manzanas } from './net.js?v=20261108t';
+import { net, merc, manzanas } from './net.js?v=20261108u';
 
 export const FUENTE = '"Montserrat","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
 export const ESTILO_CARTEL = { color: '#1d5fb5', halo: '#ffffff', negrita: true, mayus: true, tam: 14 };
@@ -114,7 +114,7 @@ function trazo(ctx, v, t, ui, hits, cache) {
   if (ui.ui && ui.sel && ui.sel.trazo === t.id) { ctx.strokeStyle = 'rgba(29,95,181,.28)'; ctx.lineWidth = w + 16; trazar(); }
   if (t.borde !== false && !t.discontinuo) { ctx.strokeStyle = t.bordeColor || '#ffffff'; ctx.lineWidth = w + 5 * k; trazar(); }
   ctx.strokeStyle = t.color; ctx.lineWidth = w; if (t.discontinuo) ctx.setLineDash([w * 2.2, w * 1.6]); trazar(); ctx.setLineDash([]);
-  if (t.flechas && t.flechas.on) flechas(ctx, v, t, segs, t.etiquetas.filter(l => l.visible !== false).map(l => { const m = merc(l.lat, l.lon), q = v.px(m[0], m[1]); return { x: q[0], y: q[1], r: String(l.texto).length * l.tam * k * 0.33 }; }));
+  if (t.flechas && t.flechas.on) flechas(ctx, v, t, segs, t.etiquetas.filter(l => l.visible !== false).map(l => { const m = merc(l.lat, l.lon), q = v.px(m[0], m[1]); return { x: q[0], y: q[1], r: String(l.texto).length * l.tam * k * (l.caja ? 0.4 : 0.33) }; }));
   if (ui.ui && ui.sel && ui.sel.trazo === t.id && t.flechas) for (const z of zonasPx(v, t.flechas)) { ctx.save(); ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, 7); ctx.fillStyle = 'rgba(217,45,32,.10)'; ctx.fill(); ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = '#d92d20'; ctx.stroke(); ctx.restore(); }
   hits.trazos.push({ id: t.id, segs, w: Math.max(w, 16) });
 }
@@ -134,15 +134,19 @@ function etiqueta(ctx, v, t, l, ui, hits, cache) {
   const lineas = (l.mayus ? String(l.texto).toUpperCase() : String(l.texto)).split('\n'), paso = size * 1.12, ang = angAuto(cache.get(t.id) || [], x, y) + (l.giro || 0) * Math.PI / 180;
   ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.font = `${l.negrita ? 800 : 500} ${size}px ${FUENTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.setLineDash([]);
   let ancho = 0; lineas.forEach(s => { ancho = Math.max(ancho, ctx.measureText(s).width); });
+  const h = paso * lineas.length, px = l.caja ? size * 0.55 : 0, py = l.caja ? size * 0.32 : 0, bw = ancho + 2 * px, bh = h + 2 * py;
+  if (l.caja) {   /* el nombre dentro de una caja redondeada (fondo y borde a elegir) */
+    rr(ctx, -bw / 2, -bh / 2, bw, bh, Math.min(bh / 2, size * 0.5)); sombra(ctx, k); ctx.fillStyle = l.fondo || '#ffffff'; ctx.fill(); sinSombra(ctx);
+    if ((l.cbw ?? 2) > 0) { ctx.lineWidth = (l.cbw ?? 2) * k; ctx.strokeStyle = l.cborde || '#1d5fb5'; ctx.stroke(); }
+  }
   lineas.forEach((s, i) => {
     const yy = (i - (lineas.length - 1) / 2) * paso;
-    ctx.shadowColor = 'rgba(0,0,0,.30)'; ctx.shadowBlur = 3 * k; ctx.shadowOffsetY = 1 * k; ctx.lineWidth = size * 0.3; ctx.strokeStyle = l.halo; ctx.strokeText(s, 0, yy);
+    if (!l.caja) { ctx.shadowColor = 'rgba(0,0,0,.30)'; ctx.shadowBlur = 3 * k; ctx.shadowOffsetY = 1 * k; ctx.lineWidth = size * 0.3; ctx.strokeStyle = l.halo; ctx.strokeText(s, 0, yy); }
     ctx.shadowColor = 'transparent'; ctx.fillStyle = l.color; ctx.fillText(s, 0, yy);
   });
-  const h = paso * lineas.length;
-  if (ui.ui && ui.sel && ui.sel.label === l.id) { ctx.strokeStyle = '#1d5fb5'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(-ancho / 2 - 6, -h / 2 - 3, ancho + 12, h + 6); }
+  if (ui.ui && ui.sel && ui.sel.label === l.id) { ctx.strokeStyle = '#1d5fb5'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(-bw / 2 - 6, -bh / 2 - 3, bw + 12, bh + 6); }
   ctx.restore();
-  hits.labels.push({ id: l.id, tid: t.id, cx: x, cy: y, w: ancho + 12, h: h + 6, ang });
+  hits.labels.push({ id: l.id, tid: t.id, cx: x, cy: y, w: bw + 12, h: bh + 6, ang });
 }
 
 /* ───────── Borrador del trazo que se está dibujando ───────── */

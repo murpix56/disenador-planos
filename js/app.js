@@ -1,8 +1,8 @@
 /* Diseñador de planos · Policía Local de Don Benito (uso personal)
  * Plano gris y blanco (o calles / satélite), recorrido que sigue las calles, color, flechas y nombres a medida, y descarga en PNG. */
-import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108t';
-import { net, CFG, DON_BENITO, setZona, buscarZona, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108t';
-import { filasLeyenda, factorEscalaZoom, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, CORTES, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108t';
+import { $, esc, uid, lsGet, lsSet, lengthM } from './util.js?v=20261108u';
+import { net, CFG, DON_BENITO, setZona, buscarZona, loadNet, loadVerdes, snap, route, merc, searchStreets, streetBounds } from './net.js?v=20261108u';
+import { filasLeyenda, factorEscalaZoom, dibujar, crearVista, trazoEn, etiquetaEn, elementoEn, imagen, dibujarSenal, SENALES, TRAFICO, REFERENCIAS, CORTES, TIERRA, ESTILO_CARTEL } from './render.js?v=20261108u';
 
 /* ───────── Proyecto ───────── */
 const PROY_KEY = 'plano.proyecto.v1';
@@ -13,7 +13,7 @@ const nuevoProyecto = () => ({ nombre: 'Plano sin título', base: 'gris', gris: 
 const nuevaMarca = (tipo, lat, lon) => ({ id: uid(), tipo, lat, lon, tam: 40, rot: 0, texto: '', ttam: 13, color: '#1d5fb5', halo: '#ffffff', mayus: true });
 const nuevaNota = (lat, lon) => ({ id: uid(), texto: 'TEXTO', lat, lon, ancla: null, tam: 16, color: '#1d5fb5', fondo: '#ffffff', borde: '#1d5fb5', bw: 3, mayus: true });
 const nuevoTrazo = n => ({ id: uid(), nombre: 'Trazo ' + n, color: '#16a34a', ancho: 7, borde: true, discontinuo: false, visible: true, flechas: { on: true, color: '#1d5fb5', tam: 20, sep: 220 }, segs: [], etiquetas: [] });
-const nuevaEtiqueta = (texto, lat, lon) => ({ id: uid(), texto, lat, lon, giro: 0, visible: true, ...ESTILO_CARTEL });
+const nuevaEtiqueta = (texto, lat, lon) => ({ id: uid(), texto, lat, lon, giro: 0, visible: true, ...ESTILO_CARTEL, caja: false, fondo: '#ffffff', cborde: '#1d5fb5', cbw: 2 });
 function normalizar(j) {
   const d = nuevoProyecto(), base = nuevoTrazo(1);
   return { ...d, ...j, gris: { ...d.gris, ...(j.gris || {}) }, tierra: { ...d.tierra, ...(j.tierra || {}) }, escala: { ...d.escala, ...(j.escala || {}) }, leyenda: { ...LEY_DEF, ...(j.leyenda || {}) }, marcas: (j.marcas || []).map(m => ({ ...nuevaMarca('prohibido', 0, 0), ...m })), notas: (j.notas || []).map(n => ({ ...nuevaNota(0, 0), ...n })), trazos: (j.trazos || []).map(t => ({ ...base, ...t, flechas: { ...base.flechas, ...(t.flechas || {}) }, etiquetas: (t.etiquetas || []).map(l => ({ ...nuevaEtiqueta('', 0, 0), ...l })) })) };
@@ -303,13 +303,14 @@ function vistaNombres() {
   const t = selTrazoObj(); if (!t) return '<p class="vacio">Selecciona un trazo (en la lista o pulsándolo en el mapa) para editar sus nombres de calle.</p>';
   const l = S.sel.label && buscarEt(S.sel.label);
   return `<h3>Nombres de «${esc(t.nombre)}»</h3>
-    <div class="btns"><button class="btn" data-act="colocar">＋ Añadir nombre</button><button class="btn" data-act="cartel-todos" title="Aplica el estilo de cartel (azul, mayúsculas, borde blanco) a todos">Estilo cartel</button></div>
+    <div class="btns"><button class="btn" data-act="colocar">＋ Añadir nombre</button><button class="btn" data-act="cartel-todos" title="Aplica el estilo de cartel (azul, mayúsculas, borde blanco) a todos">Estilo cartel</button><button class="btn" data-act="caja-todos" title="Pone todos los nombres en una caja blanca con texto negro">Estilo caja</button></div>
     ${S.colocar ? '<div class="hint">Pulsa en el mapa donde quieras el nombre.</div>' : ''}
     ${t.etiquetas.length ? `<div class="lista">${t.etiquetas.map(x => `<div class="fila${x.id === S.sel.label ? ' on' : ''}"><label class="vis"><input type="checkbox" ${x.visible !== false ? 'checked' : ''} data-o="lab" data-id="${x.id}" data-k="visible" data-ty="b" title="Mostrar u ocultar"></label><input class="txt" value="${esc(x.texto)}" data-o="lab" data-id="${x.id}" data-k="texto" data-ty="s" data-foco="${x.id}"><button class="ico" data-act="sell" data-id="${x.id}" title="Editar estilo">✎</button></div>`).join('')}</div>` : '<p class="vacio">Este trazo no tiene nombres. Añade uno o vuelve a dibujarlo siguiendo calles.</p>'}
     ${l ? `<h3>Estilo del nombre</h3><div class="card">
-      ${rg('lab', 'tam', 'Tamaño', 4, 60, 1, l.tam, l.id)}${cl('lab', 'color', 'Color del texto', l.color, l.id)}${cl('lab', 'halo', 'Color del borde', l.halo, l.id)}
+      ${rg('lab', 'tam', 'Tamaño', 4, 60, 1, l.tam, l.id)}${cl('lab', 'color', 'Color del texto', l.color, l.id)}${l.caja ? '' : cl('lab', 'halo', 'Contorno del texto', l.halo, l.id)}
       ${rg('lab', 'giro', 'Giro (°)', -90, 90, 1, l.giro, l.id)}
-      <div class="dos">${ck('lab', 'negrita', 'Negrita', l.negrita, l.id)}${ck('lab', 'mayus', 'MAYÚSCULAS', l.mayus, l.id)}</div></div>
+      <div class="dos">${ck('lab', 'negrita', 'Negrita', l.negrita, l.id)}${ck('lab', 'mayus', 'MAYÚSCULAS', l.mayus, l.id)}</div>
+      ${ck('lab', 'caja', 'Nombre dentro de una caja', l.caja, l.id)}${l.caja ? `${cl('lab', 'fondo', 'Color de la caja', l.fondo, l.id)}${cl('lab', 'cborde', 'Borde de la caja', l.cborde, l.id)}${rg('lab', 'cbw', 'Grosor del borde de la caja', 0, 6, 0.5, l.cbw, l.id)}` : ''}</div>
       <div class="btns"><button class="btn" data-act="estilo-todos">Usar en todos</button><button class="btn dng" data-act="quitar-et" data-id="${l.id}">Quitar</button></div>` : ''}
     <label class="ck sep"><input type="checkbox" id="abrev" ${S.abreviar ? 'checked' : ''}><span>Abreviar al crear (C/, Avda., Pza., Pº, Trv., Cno.)</span></label>
     <p class="mut small">Arrastra un nombre en el mapa para moverlo. El giro se suma a la dirección de la calle.</p>`;
@@ -380,7 +381,7 @@ panel.addEventListener('input', ev => {
   if (e.dataset.o === 'g') { cont.style.background = S.p.base === 'gris' ? S.p.gris.fondo : ''; const mb = document.getElementById('muestraBase'); if (mb) mb.setAttribute('style', estiloMuestra()); }
   if (e.dataset.o === 'p' && e.dataset.k === 'nombre') $('#nombre').value = v;
   guardar(); redibujar();
-  if (e.type === 'checkbox' && ['fl', 'mar', 'le', 'es'].includes(e.dataset.o)) { if (e.dataset.o === 'mar') actualizarMarco(); render(); }
+  if (e.type === 'checkbox' && (['fl', 'mar', 'le', 'es'].includes(e.dataset.o) || (e.dataset.o === 'lab' && e.dataset.k === 'caja'))) { if (e.dataset.o === 'mar') actualizarMarco(); render(); }
   if (e.type === 'color' && e.dataset.o === 't') { const s = panel.querySelectorAll('.sw'); s.forEach(b => b.classList.toggle('on', b.dataset.v === v)); const f = panel.querySelector('.fila.on i'); if (f) f.style.background = v; }
 });
 $('#nombre').addEventListener('input', ev => { S.p.nombre = ev.target.value; guardar(); });
@@ -423,8 +424,9 @@ const alClic = ev => {
     case 'copiar': copiarImagen(); break;
     case 'sell': S.sel.label = b.dataset.id; render(); redibujar(); break;
     case 'quitar-et': quitarEtiqueta(b.dataset.id); break;
-    case 'cartel-todos': if (t) { t.etiquetas.forEach(l => Object.assign(l, ESTILO_CARTEL)); guardar(); render(); redibujar(); } break;
-    case 'estilo-todos': { const l = S.sel.label && buscarEt(S.sel.label); if (t && l) { t.etiquetas.forEach(x => Object.assign(x, { tam: l.tam, color: l.color, halo: l.halo, negrita: l.negrita, mayus: l.mayus })); guardar(); redibujar(); aviso('Estilo aplicado a todos los nombres del trazo'); } break; }
+    case 'caja-todos': if (t) { t.etiquetas.forEach(l => Object.assign(l, { caja: true, fondo: '#ffffff', cborde: '#101828', cbw: 2, color: '#101828', negrita: true, mayus: true })); guardar(); render(); redibujar(); } break;
+    case 'cartel-todos': if (t) { t.etiquetas.forEach(l => Object.assign(l, ESTILO_CARTEL, { caja: false })); guardar(); render(); redibujar(); } break;
+    case 'estilo-todos': { const l = S.sel.label && buscarEt(S.sel.label); if (t && l) { t.etiquetas.forEach(x => Object.assign(x, { tam: l.tam, color: l.color, halo: l.halo, negrita: l.negrita, mayus: l.mayus, caja: l.caja, fondo: l.fondo, cborde: l.cborde, cbw: l.cbw })); guardar(); redibujar(); aviso('Estilo aplicado a todos los nombres del trazo'); } break; }
     case 'fmt': { const [w, h] = b.dataset.f.split('x').map(Number); Object.assign(S.marco, { fmt: b.dataset.f, w, h }); render(); redibujar(); break; }
     case 'png': descargarPNG(); break;
     case 'giro': { const m = S.p.marcas.find(x => x.id === S.sel.marca); if (m) { const g = +b.dataset.g; m.rot = g ? ((((m.rot || 0) + g + 180) % 360) + 360) % 360 - 180 : 0; guardar(); render(); redibujar(); } break; }
